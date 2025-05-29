@@ -90,6 +90,6 @@ python main.py --scheduled
 
 ## 実は。。。
 
-ソースコードは生成AI「Claude」「ChatGPT」により生成しメンテナーにて修正を加えたものです。
+ソースコードは生成AI「Claude」「ChatGPT」により生成したものです。
 
 ---
