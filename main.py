@@ -573,7 +573,8 @@ Robocopyバックアップの実行結果をお知らせします。
             'sender_email': self.sender_email_var.get(),
             'sender_password': self.sender_password_var.get(),  # 注意: 実運用では暗号化が必要
             'recipient_email': self.recipient_email_var.get(),
-            'history_enabled': self.history_enabled_var.get()
+            'history_enabled': self.history_enabled_var.get(),
+            'use_ssl': self.use_ssl_var.get()
         }
         
         try:
@@ -610,6 +611,7 @@ Robocopyバックアップの実行結果をお知らせします。
             self.sender_password_var.set(config.get('sender_password', ''))
             self.recipient_email_var.set(config.get('recipient_email', ''))
             self.history_enabled_var.set(config.get('history_enabled', False))
+            self.use_ssl_var.set(config.get('use_ssl', False))
             
             self.toggle_email_settings()
             self.log_message("設定を読み込みました")
