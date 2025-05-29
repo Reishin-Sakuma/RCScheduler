@@ -152,7 +152,7 @@ class RobocopyScheduler:
         log_frame = ttk.LabelFrame(main_frame, text="実行ログ", padding="10")
         log_frame.grid(row=5, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), pady=5)
         
-        self.log_text = tk.Text(log_frame, height=12, width=80)
+        self.log_text = tk.Text(log_frame, height=12, width=100)
         scrollbar = ttk.Scrollbar(log_frame, orient="vertical", command=self.log_text.yview)
         self.log_text.configure(yscrollcommand=scrollbar.set)
         self.log_text.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
