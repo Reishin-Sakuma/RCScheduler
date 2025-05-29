@@ -187,11 +187,20 @@ class RobocopyScheduler:
                 if isinstance(widget, ttk.Entry):
                     widget.configure(state='disabled')
     
-    def log_message(self, message):
+    def log_message(self, message, tag=None):
         """ログにメッセージを追加"""
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        self.log_text.insert(tk.END, f"[{timestamp}] {message}\n")
+        full_message = f"[{timestamp}] {message}\n"
+        
+        self.log_text.insert(tk.END, full_message, tag)
         self.log_text.see(tk.END)
+        
+        # タグの設定（初回のみ）
+        if not hasattr(self, '_tags_configured'):
+            self.log_text.tag_config("error", foreground="red")
+            self.log_text.tag_config("success", foreground="green")
+            self._tags_configured = True
+        
         self.root.update()
     
     def run_robocopy(self):
@@ -201,7 +210,7 @@ class RobocopyScheduler:
         options = self.options_var.get()
         
         if not source or not dest:
-            self.log_message("エラー: コピー元またはコピー先が指定されていません")
+            self.log_message("エラー: コピー元またはコピー先が指定されていません", "error")
             return False, "コピー元またはコピー先が指定されていません"
         
         # Robocopyコマンドを構築
@@ -239,10 +248,10 @@ class RobocopyScheduler:
             # エラー出力があれば表示
             stderr_output = process.stderr.read()
             if stderr_output:
-                self.log_message("エラー出力:")
+                self.log_message("エラー出力:" , "error")
                 for line in stderr_output.strip().split('\n'):
                     if line.strip():
-                        self.log_message(f"  {line}")
+                        self.log_message(f"  {line}" , "error")
             
             self.log_message("-" * 50)  # 区切り線
             
@@ -252,7 +261,7 @@ class RobocopyScheduler:
                 success = True
                 message = f"バックアップが正常に完了しました。\n戻り値: {return_code}\n\n" + "\n".join(output_lines)
             else:
-                self.log_message(f"Robocopyでエラーが発生しました（戻り値: {return_code}）")
+                self.log_message(f"Robocopyでエラーが発生しました（戻り値: {return_code}）" , "error")
                 success = False
                 message = f"バックアップでエラーが発生しました。\n戻り値: {return_code}\n\n" + "\n".join(output_lines)
                 if stderr_output:
@@ -262,7 +271,7 @@ class RobocopyScheduler:
             
         except Exception as e:
             error_msg = f"実行エラー: {str(e)}"
-            self.log_message(error_msg)
+            self.log_message(error_msg , "error")
             return False, error_msg
     
     def send_email(self, success, message):
@@ -307,7 +316,7 @@ Robocopyバックアップの実行結果をお知らせします。
             self.log_message("メール送信完了")
             
         except Exception as e:
-            self.log_message(f"メール送信エラー: {str(e)}")
+            self.log_message(f"メール送信エラー: {str(e)}" , "error")
     
     def run_now(self):
         """今すぐrobocopyを実行"""
@@ -354,12 +363,12 @@ Robocopyバックアップの実行結果をお知らせします。
                 self.update_task_status()
             else:
                 error_msg = f"タスク作成エラー: {result.stderr}"
-                self.log_message(error_msg)
+                self.log_message(error_msg , "error")
                 messagebox.showerror("エラー", error_msg)
                 
         except Exception as e:
             error_msg = f"タスク作成エラー: {str(e)}"
-            self.log_message(error_msg)
+            self.log_message(error_msg , "error")
             messagebox.showerror("エラー", error_msg)
     
     def delete_scheduled_task(self):
@@ -375,12 +384,12 @@ Robocopyバックアップの実行結果をお知らせします。
                 self.update_task_status()
             else:
                 error_msg = f"タスク削除エラー: {result.stderr}"
-                self.log_message(error_msg)
+                self.log_message(error_msg , "error")
                 messagebox.showerror("エラー", error_msg)
                 
         except Exception as e:
             error_msg = f"タスク削除エラー: {str(e)}"
-            self.log_message(error_msg)
+            self.log_message(error_msg , "error")
             messagebox.showerror("エラー", error_msg)
     
     def update_task_status(self):
@@ -432,7 +441,7 @@ Robocopyバックアップの実行結果をお知らせします。
             
         except Exception as e:
             error_msg = f"設定保存エラー: {str(e)}"
-            self.log_message(error_msg)
+            self.log_message(error_msg , "error")
             messagebox.showerror("エラー", error_msg)
     
     def load_config(self):
@@ -462,7 +471,7 @@ Robocopyバックアップの実行結果をお知らせします。
             self.log_message("設定を読み込みました")
             
         except Exception as e:
-            self.log_message(f"設定読み込みエラー: {str(e)}")
+            self.log_message(f"設定読み込みエラー: {str(e)}" , "error")
 
 def scheduled_execution():
     """スケジュール実行用の関数（コマンドライン引数で呼び出される）"""
