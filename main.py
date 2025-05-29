@@ -108,6 +108,9 @@ class RobocopyScheduler:
         ttk.Label(self.email_settings_frame, text="ポート:").grid(row=0, column=2, sticky=tk.W)
         self.smtp_port_var = tk.StringVar(value="587")
         ttk.Entry(self.email_settings_frame, textvariable=self.smtp_port_var, width=10).grid(row=0, column=3, padx=5)
+
+        self.use_ssl_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(self.email_settings_frame, text="SSLを使用", variable=self.use_ssl_var).grid(row=0, column=4, padx=5)
         
         ttk.Label(self.email_settings_frame, text="送信者メール:").grid(row=1, column=0, sticky=tk.W)
         self.sender_email_var = tk.StringVar()
@@ -440,8 +443,14 @@ Robocopyバックアップの実行結果をお知らせします。
             msg.attach(MIMEText(body, 'plain', 'utf-8'))
             
             # SMTPサーバーに接続してメール送信
-            server = smtplib.SMTP(smtp_server, smtp_port)
-            server.starttls()
+            if self.use_ssl_var.get():
+                server = smtplib.SMTP_SSL(smtp_server, smtp_port, timeout=10)
+            else:
+                server = smtplib.SMTP(smtp_server, smtp_port, timeout=10)
+                server.ehlo()
+                if server.has_extn('STARTTLS'):
+                    server.starttls()
+                    server.ehlo()
             server.login(sender_email, sender_password)
             server.send_message(msg)
             server.quit()
