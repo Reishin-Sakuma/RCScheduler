@@ -152,7 +152,7 @@ class RobocopyScheduler:
         log_frame = ttk.LabelFrame(main_frame, text="実行ログ", padding="10")
         log_frame.grid(row=5, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), pady=5)
         
-        self.log_text = tk.Text(log_frame, height=8, width=80)
+        self.log_text = tk.Text(log_frame, height=12, width=80)
         scrollbar = ttk.Scrollbar(log_frame, orient="vertical", command=self.log_text.yview)
         self.log_text.configure(yscrollcommand=scrollbar.set)
         self.log_text.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
@@ -209,17 +209,54 @@ class RobocopyScheduler:
         
         try:
             self.log_message(f"Robocopy実行開始: {cmd}")
-            result = subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding='cp932')
+            self.log_message("-" * 50)  # 区切り線
+            
+            # リアルタイムで出力を表示するためのプロセス実行
+            process = subprocess.Popen(
+                cmd, 
+                shell=True, 
+                stdout=subprocess.PIPE, 
+                stderr=subprocess.PIPE, 
+                text=True, 
+                encoding='cp932',
+                bufsize=1,  # 行バッファリング
+                universal_newlines=True
+            )
+            
+            # 標準出力をリアルタイムで表示
+            output_lines = []
+            while True:
+                output = process.stdout.readline()
+                if output == '' and process.poll() is not None:
+                    break
+                if output:
+                    output_lines.append(output.strip())
+                    self.log_message(output.strip())
+            
+            # プロセスの完了を待つ
+            return_code = process.wait()
+            
+            # エラー出力があれば表示
+            stderr_output = process.stderr.read()
+            if stderr_output:
+                self.log_message("エラー出力:")
+                for line in stderr_output.strip().split('\n'):
+                    if line.strip():
+                        self.log_message(f"  {line}")
+            
+            self.log_message("-" * 50)  # 区切り線
             
             # Robocopyの戻り値を確認（0-7は正常、8以上はエラー）
-            if result.returncode < 8:
-                self.log_message(f"Robocopy実行完了（戻り値: {result.returncode}）")
+            if return_code < 8:
+                self.log_message(f"Robocopy実行完了（戻り値: {return_code}）")
                 success = True
-                message = f"バックアップが正常に完了しました。\n戻り値: {result.returncode}\n\n{result.stdout}"
+                message = f"バックアップが正常に完了しました。\n戻り値: {return_code}\n\n" + "\n".join(output_lines)
             else:
-                self.log_message(f"Robocopyでエラーが発生しました（戻り値: {result.returncode}）")
+                self.log_message(f"Robocopyでエラーが発生しました（戻り値: {return_code}）")
                 success = False
-                message = f"バックアップでエラーが発生しました。\n戻り値: {result.returncode}\n\n{result.stderr}"
+                message = f"バックアップでエラーが発生しました。\n戻り値: {return_code}\n\n" + "\n".join(output_lines)
+                if stderr_output:
+                    message += f"\n\nエラー詳細:\n{stderr_output}"
             
             return success, message
             
