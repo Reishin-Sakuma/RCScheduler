@@ -2,30 +2,26 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import subprocess
 import smtplib
-import schedule
-import time
-import threading
 import json
 import os
-from datetime import datetime
+import sys
+from datetime import datetime, timedelta
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 class RobocopyScheduler:
     def __init__(self, root):
         self.root = root
-        self.root.title("Robocopy スケジューラ")
-        self.root.geometry("800x700")
+        self.root.title("Robocopy スケジューラ (Windows Task Scheduler)")
+        self.root.geometry("800x750")
         
         # 設定を保存するファイル名
         self.config_file = "robocopy_config.json"
-        
-        # スケジュール実行用のスレッド制御
-        self.scheduler_running = False
-        self.scheduler_thread = None
+        self.task_name = "RobocopyBackupTask"
         
         self.create_widgets()
         self.load_config()
+        self.update_task_status()
     
     def create_widgets(self):
         # メインフレーム
@@ -61,17 +57,25 @@ class RobocopyScheduler:
         
         # 実行頻度
         ttk.Label(schedule_frame, text="実行頻度:").grid(row=0, column=0, sticky=tk.W)
-        self.frequency_var = tk.StringVar(value="毎日")
+        self.frequency_var = tk.StringVar(value="DAILY")
         frequency_combo = ttk.Combobox(schedule_frame, textvariable=self.frequency_var,
-                                     values=["毎日", "毎週月曜日", "毎週火曜日", "毎週水曜日", 
-                                           "毎週木曜日", "毎週金曜日", "毎週土曜日", "毎週日曜日"])
+                                     values=[("DAILY", "毎日"), ("WEEKLY", "毎週")])
         frequency_combo.grid(row=0, column=1, padx=5)
         frequency_combo.state(['readonly'])
         
+        # 曜日選択（毎週の場合）
+        ttk.Label(schedule_frame, text="曜日:").grid(row=1, column=0, sticky=tk.W)
+        self.weekday_var = tk.StringVar(value="MON")
+        weekday_combo = ttk.Combobox(schedule_frame, textvariable=self.weekday_var,
+                                   values=[("MON", "月曜日"), ("TUE", "火曜日"), ("WED", "水曜日"), 
+                                          ("THU", "木曜日"), ("FRI", "金曜日"), ("SAT", "土曜日"), ("SUN", "日曜日")])
+        weekday_combo.grid(row=1, column=1, padx=5)
+        weekday_combo.state(['readonly'])
+        
         # 実行時刻
-        ttk.Label(schedule_frame, text="実行時刻:").grid(row=1, column=0, sticky=tk.W)
+        ttk.Label(schedule_frame, text="実行時刻:").grid(row=2, column=0, sticky=tk.W)
         time_frame = ttk.Frame(schedule_frame)
-        time_frame.grid(row=1, column=1, padx=5)
+        time_frame.grid(row=2, column=1, padx=5)
         
         self.hour_var = tk.StringVar(value="09")
         self.minute_var = tk.StringVar(value="00")
@@ -130,16 +134,25 @@ class RobocopyScheduler:
                   command=self.save_config).grid(row=0, column=0, padx=5)
         ttk.Button(button_frame, text="今すぐ実行", 
                   command=self.run_now).grid(row=0, column=1, padx=5)
-        ttk.Button(button_frame, text="スケジュール開始", 
-                  command=self.start_scheduler).grid(row=0, column=2, padx=5)
-        ttk.Button(button_frame, text="スケジュール停止", 
-                  command=self.stop_scheduler).grid(row=0, column=3, padx=5)
+        ttk.Button(button_frame, text="タスク作成/更新", 
+                  command=self.create_scheduled_task).grid(row=0, column=2, padx=5)
+        ttk.Button(button_frame, text="タスク削除", 
+                  command=self.delete_scheduled_task).grid(row=0, column=3, padx=5)
+        
+        # タスクステータス表示
+        status_frame = ttk.LabelFrame(main_frame, text="タスクステータス", padding="10")
+        status_frame.grid(row=4, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
+        
+        self.task_status_var = tk.StringVar(value="確認中...")
+        ttk.Label(status_frame, textvariable=self.task_status_var).grid(row=0, column=0, sticky=tk.W)
+        ttk.Button(status_frame, text="ステータス更新", 
+                  command=self.update_task_status).grid(row=0, column=1, padx=10)
         
         # ログ表示エリア
         log_frame = ttk.LabelFrame(main_frame, text="実行ログ", padding="10")
-        log_frame.grid(row=4, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), pady=5)
+        log_frame.grid(row=5, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), pady=5)
         
-        self.log_text = tk.Text(log_frame, height=10, width=80)
+        self.log_text = tk.Text(log_frame, height=8, width=80)
         scrollbar = ttk.Scrollbar(log_frame, orient="vertical", command=self.log_text.yview)
         self.log_text.configure(yscrollcommand=scrollbar.set)
         self.log_text.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
@@ -148,7 +161,7 @@ class RobocopyScheduler:
         # ステータスバー
         self.status_var = tk.StringVar(value="準備完了")
         status_bar = ttk.Label(main_frame, textvariable=self.status_var, relief=tk.SUNKEN)
-        status_bar.grid(row=5, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
+        status_bar.grid(row=6, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
     
     def browse_source(self):
         """コピー元フォルダを選択"""
@@ -269,65 +282,92 @@ Robocopyバックアップの実行結果をお知らせします。
         
         self.status_var.set("実行完了" if success else "実行エラー")
     
-    def scheduled_run(self):
-        """スケジュールされた実行"""
-        self.log_message("スケジュール実行開始")
-        success, message = self.run_robocopy()
-        
-        if self.email_enabled_var.get():
-            self.send_email(success, message)
-    
-    def start_scheduler(self):
-        """スケジューラーを開始"""
-        if self.scheduler_running:
-            messagebox.showwarning("警告", "スケジューラーは既に実行中です")
+    def create_scheduled_task(self):
+        """Windowsタスクスケジューラにタスクを作成"""
+        if not self.source_var.get() or not self.dest_var.get():
+            messagebox.showerror("エラー", "コピー元とコピー先を設定してください")
             return
         
-        # スケジュールをクリア
-        schedule.clear()
+        # 設定を保存してからタスクを作成
+        self.save_config()
         
-        # 頻度と時刻を取得
-        frequency = self.frequency_var.get()
-        time_str = f"{self.hour_var.get()}:{self.minute_var.get()}"
+        # 現在のスクリプトのパスを取得
+        script_path = os.path.abspath(__file__)
+        python_path = sys.executable
         
-        # スケジュールを設定
-        if frequency == "毎日":
-            schedule.every().day.at(time_str).do(self.scheduled_run)
-        elif frequency == "毎週月曜日":
-            schedule.every().monday.at(time_str).do(self.scheduled_run)
-        elif frequency == "毎週火曜日":
-            schedule.every().tuesday.at(time_str).do(self.scheduled_run)
-        elif frequency == "毎週水曜日":
-            schedule.every().wednesday.at(time_str).do(self.scheduled_run)
-        elif frequency == "毎週木曜日":
-            schedule.every().thursday.at(time_str).do(self.scheduled_run)
-        elif frequency == "毎週金曜日":
-            schedule.every().friday.at(time_str).do(self.scheduled_run)
-        elif frequency == "毎週土曜日":
-            schedule.every().saturday.at(time_str).do(self.scheduled_run)
-        elif frequency == "毎週日曜日":
-            schedule.every().sunday.at(time_str).do(self.scheduled_run)
+        # タスクの実行時刻
+        start_time = f"{self.hour_var.get()}:{self.minute_var.get()}"
         
-        # スケジューラーを別スレッドで実行
-        self.scheduler_running = True
-        self.scheduler_thread = threading.Thread(target=self.run_scheduler, daemon=True)
-        self.scheduler_thread.start()
+        # スケジュール頻度に応じてコマンドを構築
+        if self.frequency_var.get() == "DAILY":
+            schedule_type = "/SC DAILY"
+        else:  # WEEKLY
+            weekday = self.weekday_var.get()
+            schedule_type = f"/SC WEEKLY /D {weekday}"
         
-        self.log_message(f"スケジューラー開始: {frequency} {time_str}")
-        self.status_var.set("スケジューラー実行中")
+        # schtasksコマンドを構築
+        cmd = f'''schtasks /CREATE /TN "{self.task_name}" /TR "\\"{python_path}\\" \\"{script_path}\\" --scheduled" {schedule_type} /ST {start_time} /F'''
+        
+        try:
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding='cp932')
+            
+            if result.returncode == 0:
+                self.log_message(f"タスクを作成しました: {self.task_name}")
+                messagebox.showinfo("成功", f"スケジュールタスク '{self.task_name}' を作成しました")
+                self.update_task_status()
+            else:
+                error_msg = f"タスク作成エラー: {result.stderr}"
+                self.log_message(error_msg)
+                messagebox.showerror("エラー", error_msg)
+                
+        except Exception as e:
+            error_msg = f"タスク作成エラー: {str(e)}"
+            self.log_message(error_msg)
+            messagebox.showerror("エラー", error_msg)
     
-    def run_scheduler(self):
-        """スケジューラーのメインループ"""
-        while self.scheduler_running:
-            schedule.run_pending()
-            time.sleep(60)  # 1分ごとにチェック
+    def delete_scheduled_task(self):
+        """スケジュールされたタスクを削除"""
+        cmd = f'schtasks /DELETE /TN "{self.task_name}" /F'
+        
+        try:
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding='cp932')
+            
+            if result.returncode == 0:
+                self.log_message(f"タスクを削除しました: {self.task_name}")
+                messagebox.showinfo("成功", f"スケジュールタスク '{self.task_name}' を削除しました")
+                self.update_task_status()
+            else:
+                error_msg = f"タスク削除エラー: {result.stderr}"
+                self.log_message(error_msg)
+                messagebox.showerror("エラー", error_msg)
+                
+        except Exception as e:
+            error_msg = f"タスク削除エラー: {str(e)}"
+            self.log_message(error_msg)
+            messagebox.showerror("エラー", error_msg)
     
-    def stop_scheduler(self):
-        """スケジューラーを停止"""
-        self.scheduler_running = False
-        schedule.clear()
-        self.log_message("スケジューラー停止")
-        self.status_var.set("スケジューラー停止")
+    def update_task_status(self):
+        """タスクのステータスを更新"""
+        cmd = f'schtasks /QUERY /TN "{self.task_name}"'
+        
+        try:
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding='cp932')
+            
+            if result.returncode == 0:
+                # タスクが存在する場合
+                lines = result.stdout.split('\n')
+                for line in lines:
+                    if 'Next Run Time' in line or '次回の実行時刻' in line:
+                        next_run = line.split(':')[1].strip() if ':' in line else "不明"
+                        self.task_status_var.set(f"タスク登録済み - 次回実行: {next_run}")
+                        return
+                
+                self.task_status_var.set("タスク登録済み")
+            else:
+                self.task_status_var.set("タスク未登録")
+                
+        except Exception as e:
+            self.task_status_var.set(f"ステータス確認エラー: {str(e)}")
     
     def save_config(self):
         """設定をファイルに保存"""
@@ -336,6 +376,7 @@ Robocopyバックアップの実行結果をお知らせします。
             'dest': self.dest_var.get(),
             'options': self.options_var.get(),
             'frequency': self.frequency_var.get(),
+            'weekday': self.weekday_var.get(),
             'hour': self.hour_var.get(),
             'minute': self.minute_var.get(),
             'email_enabled': self.email_enabled_var.get(),
@@ -351,7 +392,6 @@ Robocopyバックアップの実行結果をお知らせします。
                 json.dump(config, f, ensure_ascii=False, indent=2)
             
             self.log_message("設定を保存しました")
-            messagebox.showinfo("成功", "設定が保存されました")
             
         except Exception as e:
             error_msg = f"設定保存エラー: {str(e)}"
@@ -370,7 +410,8 @@ Robocopyバックアップの実行結果をお知らせします。
             self.source_var.set(config.get('source', ''))
             self.dest_var.set(config.get('dest', ''))
             self.options_var.set(config.get('options', '/E /R:3 /W:10'))
-            self.frequency_var.set(config.get('frequency', '毎日'))
+            self.frequency_var.set(config.get('frequency', 'DAILY'))
+            self.weekday_var.set(config.get('weekday', 'MON'))
             self.hour_var.set(config.get('hour', '09'))
             self.minute_var.set(config.get('minute', '00'))
             self.email_enabled_var.set(config.get('email_enabled', False))
@@ -386,10 +427,36 @@ Robocopyバックアップの実行結果をお知らせします。
         except Exception as e:
             self.log_message(f"設定読み込みエラー: {str(e)}")
 
+def scheduled_execution():
+    """スケジュール実行用の関数（コマンドライン引数で呼び出される）"""
+    scheduler = RobocopyScheduler(None)
+    
+    # 設定を読み込み
+    scheduler.load_config()
+    
+    # Robocopyを実行
+    success, message = scheduler.run_robocopy()
+    
+    # メール送信（設定されている場合）
+    if scheduler.email_enabled_var.get():
+        scheduler.send_email(success, message)
+    
+    # ログファイルに結果を記録
+    log_file = "robocopy_schedule_log.txt"
+    with open(log_file, 'a', encoding='utf-8') as f:
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        f.write(f"[{timestamp}] {'成功' if success else '失敗'}: {message}\n")
+
 def main():
-    root = tk.Tk()
-    app = RobocopyScheduler(root)
-    root.mainloop()
+    # コマンドライン引数をチェック
+    if len(sys.argv) > 1 and sys.argv[1] == '--scheduled':
+        # スケジュール実行
+        scheduled_execution()
+    else:
+        # GUI実行
+        root = tk.Tk()
+        app = RobocopyScheduler(root)
+        root.mainloop()
 
 if __name__ == "__main__":
     main()
