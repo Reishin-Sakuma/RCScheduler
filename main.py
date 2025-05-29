@@ -13,7 +13,7 @@ class RobocopyScheduler:
     def __init__(self, root):
         self.root = root
         self.root.title("Robocopy スケジューラ (Windows Task Scheduler)")
-        self.root.geometry("800x750")
+        self.root.geometry("800x850")
         
         # 設定を保存するファイル名
         self.config_file = "robocopy_config.json"
@@ -142,6 +142,23 @@ class RobocopyScheduler:
         # タスクステータス表示
         status_frame = ttk.LabelFrame(main_frame, text="タスクステータス", padding="10")
         status_frame.grid(row=4, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
+
+        # タスク履歴設定セクション
+        history_frame = ttk.LabelFrame(main_frame, text="タスク履歴設定", padding="10")
+        history_frame.grid(row=5, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
+
+        # 履歴有効化チェックボックス
+        self.history_enabled_var = tk.BooleanVar()
+        ttk.Checkbutton(history_frame, text="すべてのタスク履歴を有効にする", 
+                    variable=self.history_enabled_var).grid(row=0, column=0, sticky=tk.W)
+
+        history_button_frame = ttk.Frame(history_frame)
+        history_button_frame.grid(row=1, column=0, pady=5)
+
+        ttk.Button(history_button_frame, text="履歴設定を適用", 
+                command=self.apply_task_history).grid(row=0, column=0, padx=5)
+        ttk.Button(history_button_frame, text="現在の設定確認", 
+                command=self.check_task_history).grid(row=0, column=1, padx=5)
         
         self.task_status_var = tk.StringVar(value="確認中...")
         ttk.Label(status_frame, textvariable=self.task_status_var).grid(row=0, column=0, sticky=tk.W)
@@ -150,7 +167,7 @@ class RobocopyScheduler:
         
         # ログ表示エリア
         log_frame = ttk.LabelFrame(main_frame, text="実行ログ", padding="10")
-        log_frame.grid(row=5, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), pady=5)
+        log_frame.grid(row=6, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), pady=5)
         
         self.log_text = tk.Text(log_frame, height=12, width=100)
         scrollbar = ttk.Scrollbar(log_frame, orient="vertical", command=self.log_text.yview)
@@ -161,8 +178,124 @@ class RobocopyScheduler:
         # ステータスバー
         self.status_var = tk.StringVar(value="準備完了")
         status_bar = ttk.Label(main_frame, textvariable=self.status_var, relief=tk.SUNKEN)
-        status_bar.grid(row=6, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
+        status_bar.grid(row=7, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
     
+    def check_task_history(self):
+        """現在のタスク履歴設定を確認"""
+        try:
+            # より確実な確認方法を使用
+            cmd = 'wevtutil gl Microsoft-Windows-TaskScheduler/Operational'
+            
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding='cp932')
+            
+            if result.returncode == 0:
+                # enabled: true/false を確認
+                if "enabled: true" in result.stdout.lower():
+                    self.history_enabled_var.set(True)
+                    status_msg = "タスク履歴は現在有効です"
+                else:
+                    self.history_enabled_var.set(False)
+                    status_msg = "タスク履歴は現在無効です"
+            else:
+                status_msg = "履歴設定の確認に失敗しました"
+            
+            self.log_message(status_msg)
+            messagebox.showinfo("履歴設定確認", status_msg)
+            
+        except Exception as e:
+            error_msg = f"履歴設定確認エラー: {str(e)}"
+            self.log_message(error_msg, "error")
+            messagebox.showerror("エラー", error_msg)
+
+    def is_admin(self):
+        """現在のプロセスが管理者権限で実行されているかチェック"""
+        try:
+            import ctypes
+            return ctypes.windll.shell32.IsUserAnAdmin()
+        except:
+            return False
+
+    def run_as_admin(self, command):
+        """管理者権限でコマンドを実行"""
+        try:
+            import ctypes
+            
+            # PowerShellを管理者権限で実行
+            result = ctypes.windll.shell32.ShellExecuteW(
+                None, 
+                "runas",  # 管理者として実行
+                "powershell.exe", 
+                f"-Command \"{command}\"",
+                None, 
+                1  # SW_SHOWNORMAL
+            )
+            
+            # 戻り値が32より大きければ成功
+            return result > 32
+        except Exception as e:
+            self.log_message(f"管理者権限実行エラー: {str(e)}", "error")
+            return False
+
+    def apply_task_history(self):
+        """タスク履歴の有効/無効を設定"""
+        try:
+            if self.history_enabled_var.get():
+                action = "有効化"
+                cmd = "wevtutil sl Microsoft-Windows-TaskScheduler/Operational /e:true"
+            else:
+                action = "無効化"
+                cmd = "wevtutil sl Microsoft-Windows-TaskScheduler/Operational /e:false"
+            
+            # 管理者権限が必要であることをユーザーに通知
+            response = messagebox.askyesno(
+                "管理者権限が必要", 
+                f"タスク履歴の{action}には管理者権限が必要です。\n"
+                "UACダイアログが表示されますが、続行しますか？"
+            )
+            
+            if not response:
+                self.log_message("操作がキャンセルされました")
+                return
+            
+            # 現在管理者権限があるかチェック
+            if self.is_admin():
+                # すでに管理者権限がある場合は直接実行
+                self.log_message("管理者権限で実行中...")
+                result = subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding='cp932')
+                
+                if result.returncode == 0:
+                    success_msg = f"タスク履歴を{action}しました"
+                    self.log_message(success_msg)
+                    messagebox.showinfo("成功", success_msg)
+                    # 設定確認を自動実行
+                    self.check_task_history()
+                else:
+                    error_msg = f"履歴{action}エラー: {result.stderr}"
+                    self.log_message(error_msg, "error")
+                    messagebox.showerror("エラー", error_msg)
+            else:
+                # 管理者権限がない場合はUACダイアログを表示して実行
+                self.log_message(f"管理者権限でタスク履歴{action}を実行します...")
+                
+                if self.run_as_admin(cmd):
+                    self.log_message("管理者権限でのコマンド実行を開始しました")
+                    messagebox.showinfo(
+                        "実行中", 
+                        f"管理者権限でタスク履歴{action}を実行中です。\n"
+                        "完了後、「現在の設定確認」ボタンで結果を確認してください。"
+                    )
+                    # 少し待ってから設定確認
+                    self.root.after(2000, self.check_task_history)  # 2秒後に確認
+                else:
+                    error_msg = "管理者権限での実行に失敗しました"
+                    self.log_message(error_msg, "error")
+                    messagebox.showerror("エラー", error_msg)
+                    
+        except Exception as e:
+            error_msg = f"履歴設定エラー: {str(e)}"
+            self.log_message(error_msg, "error")
+            messagebox.showerror("エラー", error_msg)
+
     def browse_source(self):
         """コピー元フォルダを選択"""
         folder = filedialog.askdirectory(title="コピー元フォルダを選択")
@@ -430,7 +563,8 @@ Robocopyバックアップの実行結果をお知らせします。
             'smtp_port': self.smtp_port_var.get(),
             'sender_email': self.sender_email_var.get(),
             'sender_password': self.sender_password_var.get(),  # 注意: 実運用では暗号化が必要
-            'recipient_email': self.recipient_email_var.get()
+            'recipient_email': self.recipient_email_var.get(),
+            'history_enabled': self.history_enabled_var.get()
         }
         
         try:
@@ -466,6 +600,7 @@ Robocopyバックアップの実行結果をお知らせします。
             self.sender_email_var.set(config.get('sender_email', ''))
             self.sender_password_var.set(config.get('sender_password', ''))
             self.recipient_email_var.set(config.get('recipient_email', ''))
+            self.history_enabled_var.set(config.get('history_enabled', False))
             
             self.toggle_email_settings()
             self.log_message("設定を読み込みました")
