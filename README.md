@@ -49,7 +49,7 @@ pip install tk
 ### GUIからの起動
 
 ```bash
-python main.py
+python RCScheduler.py
 ```
 
 ### 初回起動時に行うこと
