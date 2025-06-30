@@ -19,6 +19,8 @@ class RobocopyScheduler:
         self.config_file = "robocopy_config.json"
         self.task_name = "RobocopyBackupTask"
         
+        self.option_vars = {}
+        
         self.create_widgets()
         self.load_config()
         self.update_task_status()
@@ -47,9 +49,55 @@ class RobocopyScheduler:
                   command=self.browse_dest).grid(row=1, column=2)
         
         # Robocopyオプション
-        ttk.Label(robocopy_frame, text="追加オプション:").grid(row=2, column=0, sticky=tk.W)
-        self.options_var = tk.StringVar(value="/E /R:3 /W:10")
-        ttk.Entry(robocopy_frame, textvariable=self.options_var, width=50).grid(row=2, column=1, padx=5)
+        ttk.Label(robocopy_frame, text="Robocopyオプション:").grid(row=2, column=0, sticky=(tk.W, tk.N), padx=5, pady=5)
+        
+        # オプション選択用のフレーム
+        options_frame = ttk.Frame(robocopy_frame)
+        options_frame.grid(row=2, column=1, columnspan=2, sticky=(tk.W, tk.E), padx=5, pady=5)
+        
+        # オプション定義（チェックボックス、オプション名、説明）
+        options_config = [
+            ("copy_subdirs", "/E", "空のディレクトリも含めてコピー"),
+            ("mirror_mode", "/MIR", "ミラーモード（削除も同期）"),
+            ("multi_thread", "/MT:8", "マルチスレッド（8並列）"),
+            ("copy_security", "/SEC", "セキュリティ情報もコピー"),
+            ("copy_all", "/COPYALL", "すべての情報をコピー"),
+            ("no_progress", "/NP", "進行状況を表示しない"),
+            ("create_dirlogs", "/TEE", "コンソールとログの両方に出力"),
+            ("exclude_junctions", "/XJD", "ジャンクションポイントを除外"),
+        ]
+        
+        # チェックボックスを作成
+        for i, (var_name, option, description) in enumerate(options_config):
+            self.option_vars[var_name] = tk.BooleanVar()
+            row = i // 2
+            col = i % 2
+            
+            frame = ttk.Frame(options_frame)
+            frame.grid(row=row, column=col, sticky=tk.W, padx=10, pady=2)
+            
+            ttk.Checkbutton(frame, variable=self.option_vars[var_name]).grid(row=0, column=0)
+            ttk.Label(frame, text=f"{option}").grid(row=0, column=1, padx=(5, 0), sticky=tk.W)
+            ttk.Label(frame, text=f"({description})", font=('', 8)).grid(row=1, column=1, padx=(5, 0), sticky=tk.W)
+        
+        # カスタムオプション入力欄
+        custom_frame = ttk.Frame(options_frame)
+        custom_frame.grid(row=len(options_config)//2 + 1, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(10, 0))
+        
+        ttk.Label(custom_frame, text="リトライ回数:").grid(row=0, column=0, sticky=tk.W)
+        self.retry_var = tk.StringVar(value="3")
+        ttk.Spinbox(custom_frame, from_=0, to=10, textvariable=self.retry_var, width=5).grid(row=0, column=1, padx=5)
+        
+        ttk.Label(custom_frame, text="リトライ間隔(秒):").grid(row=0, column=2, sticky=tk.W, padx=(20, 0))
+        self.wait_var = tk.StringVar(value="10")
+        ttk.Spinbox(custom_frame, from_=1, to=60, textvariable=self.wait_var, width=5).grid(row=0, column=3, padx=5)
+        
+        ttk.Label(custom_frame, text="追加オプション:").grid(row=1, column=0, sticky=tk.W, pady=(5, 0))
+        self.custom_options_var = tk.StringVar()
+        ttk.Entry(custom_frame, textvariable=self.custom_options_var, width=40).grid(row=1, column=1, columnspan=3, padx=5, pady=(5, 0), sticky=(tk.W, tk.E))
+        
+        # デフォルトで/Eを選択
+        self.option_vars["copy_subdirs"].set(True)
         
         # スケジュール設定セクション
         schedule_frame = ttk.LabelFrame(main_frame, text="スケジュール設定", padding="10")
@@ -339,11 +387,46 @@ class RobocopyScheduler:
         
         self.root.update()
     
+    def build_robocopy_options(self):
+        """選択されたオプションからRobocopyのオプション文字列を構築"""
+        options = []
+        
+        # チェックボックスで選択されたオプションを追加
+        option_mapping = {
+            "copy_subdirs": "/E",
+            "mirror_mode": "/MIR", 
+            "multi_thread": "/MT:8",
+            "copy_security": "/SEC",
+            "copy_all": "/COPYALL",
+            "no_progress": "/NP",
+            "create_dirlogs": "/TEE",
+            "exclude_junctions": "/XJD",
+        }
+        
+        for var_name, option in option_mapping.items():
+            if self.option_vars[var_name].get():
+                options.append(option)
+        
+        # リトライ設定を追加
+        retry_count = self.retry_var.get()
+        wait_time = self.wait_var.get()
+        if retry_count and retry_count != "0":
+            options.append(f"/R:{retry_count}")
+        if wait_time:
+            options.append(f"/W:{wait_time}")
+        
+        # カスタムオプションを追加
+        custom_options = self.custom_options_var.get().strip()
+        if custom_options:
+            options.append(custom_options)
+        
+        return " ".join(options)
+    
     def run_robocopy(self):
         """Robocopyを実行"""
         source = self.source_var.get()
         dest = self.dest_var.get()
-        options = self.options_var.get()
+        options = self.build_robocopy_options()
         
         if not source or not dest:
             self.log_message("エラー: コピー元またはコピー先が指定されていません", "error")
@@ -562,7 +645,12 @@ Robocopyバックアップの実行結果をお知らせします。
         config = {
             'source': self.source_var.get(),
             'dest': self.dest_var.get(),
-            'options': self.options_var.get(),
+            # 以下の行を変更
+            'robocopy_options': {var_name: var.get() for var_name, var in self.option_vars.items()},
+            'retry_count': self.retry_var.get(),
+            'wait_time': self.wait_var.get(), 
+            'custom_options': self.custom_options_var.get(),
+            # 以下は既存と同じ
             'frequency': self.frequency_var.get(),
             'weekday': self.weekday_var.get(),
             'hour': self.hour_var.get(),
@@ -571,7 +659,7 @@ Robocopyバックアップの実行結果をお知らせします。
             'smtp_server': self.smtp_server_var.get(),
             'smtp_port': self.smtp_port_var.get(),
             'sender_email': self.sender_email_var.get(),
-            'sender_password': self.sender_password_var.get(),  # 注意: 実運用では暗号化が必要
+            'sender_password': self.sender_password_var.get(),
             'recipient_email': self.recipient_email_var.get(),
             'history_enabled': self.history_enabled_var.get(),
             'use_ssl': self.use_ssl_var.get()
@@ -599,7 +687,17 @@ Robocopyバックアップの実行結果をお知らせします。
             
             self.source_var.set(config.get('source', ''))
             self.dest_var.set(config.get('dest', ''))
-            self.options_var.set(config.get('options', '/E /R:3 /W:10'))
+            
+            # 新しいオプション設定の読み込み
+            robocopy_options = config.get('robocopy_options', {})
+            for var_name, var in self.option_vars.items():
+                var.set(robocopy_options.get(var_name, False))
+            
+            self.retry_var.set(config.get('retry_count', '3'))
+            self.wait_var.set(config.get('wait_time', '10'))
+            self.custom_options_var.set(config.get('custom_options', ''))
+            
+            # 既存の設定読み込み（変更なし）
             self.frequency_var.set(config.get('frequency', 'DAILY'))
             self.weekday_var.set(config.get('weekday', 'MON'))
             self.hour_var.set(config.get('hour', '09'))
