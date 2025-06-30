@@ -450,20 +450,22 @@ class RobocopyScheduler:
         
         # 実行頻度
         ttk.Label(schedule_frame, text="実行頻度:").grid(row=0, column=0, sticky=tk.W)
-        self.frequency_var = tk.StringVar(value="DAILY")
-        frequency_combo = ttk.Combobox(schedule_frame, textvariable=self.frequency_var,
-                                     values=[("DAILY", "毎日"), ("WEEKLY", "毎週")])
-        frequency_combo.grid(row=0, column=1, padx=5)
-        frequency_combo.state(['readonly'])
+        self.frequency_var = tk.StringVar(value="毎日")
+        self.frequency_combo = ttk.Combobox(schedule_frame, textvariable=self.frequency_var,
+                                     values=["毎日", "毎週"])
+        self.frequency_combo.grid(row=0, column=1, padx=5)
+        self.frequency_combo.state(['readonly'])
+        # 頻度変更時のイベントを追加
+        self.frequency_combo.bind('<<ComboboxSelected>>', self.on_frequency_changed)
         
         # 曜日選択（毎週の場合）
-        ttk.Label(schedule_frame, text="曜日:").grid(row=1, column=0, sticky=tk.W)
-        self.weekday_var = tk.StringVar(value="MON")
-        weekday_combo = ttk.Combobox(schedule_frame, textvariable=self.weekday_var,
-                                   values=[("MON", "月曜日"), ("TUE", "火曜日"), ("WED", "水曜日"), 
-                                          ("THU", "木曜日"), ("FRI", "金曜日"), ("SAT", "土曜日"), ("SUN", "日曜日")])
-        weekday_combo.grid(row=1, column=1, padx=5)
-        weekday_combo.state(['readonly'])
+        self.weekday_label = ttk.Label(schedule_frame, text="曜日:")
+        self.weekday_label.grid(row=1, column=0, sticky=tk.W)
+        self.weekday_var = tk.StringVar(value="月曜日")
+        self.weekday_combo = ttk.Combobox(schedule_frame, textvariable=self.weekday_var,
+                                   values=["月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日", "日曜日"])
+        self.weekday_combo.grid(row=1, column=1, padx=5)
+        self.weekday_combo.state(['readonly'])
         
         # 実行時刻
         ttk.Label(schedule_frame, text="実行時刻:").grid(row=2, column=0, sticky=tk.W)
@@ -579,7 +581,46 @@ class RobocopyScheduler:
         self.status_var = tk.StringVar(value="準備完了")
         status_bar = ttk.Label(main_frame, textvariable=self.status_var, relief=tk.SUNKEN)
         status_bar.grid(row=7, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
+
+        # 初期状態で曜日選択の有効/無効を設定
+        self.update_weekday_state()
     
+    def on_frequency_changed(self, event=None):
+        """実行頻度が変更されたときの処理"""
+        self.update_weekday_state()
+
+    def update_weekday_state(self):
+        """曜日選択の有効/無効を更新"""
+        if self.frequency_var.get() == "毎日":
+            # 毎日の場合は曜日選択を無効化
+            self.weekday_combo.configure(state='disabled')
+            self.weekday_label.configure(foreground='gray')
+        else:
+            # 毎週の場合は曜日選択を有効化
+            self.weekday_combo.configure(state='readonly')
+            self.weekday_label.configure(foreground='black')
+
+    def get_frequency_code(self):
+        """表示文字列を内部コードに変換"""
+        frequency_map = {
+            "毎日": "DAILY",
+            "毎週": "WEEKLY"
+        }
+        return frequency_map.get(self.frequency_var.get(), "DAILY")
+
+    def get_weekday_code(self):
+        """表示文字列を内部コードに変換"""
+        weekday_map = {
+            "月曜日": "MON",
+            "火曜日": "TUE", 
+            "水曜日": "WED",
+            "木曜日": "THU",
+            "金曜日": "FRI",
+            "土曜日": "SAT",
+            "日曜日": "SUN"
+        }
+        return weekday_map.get(self.weekday_var.get(), "MON")
+
     def _on_mousewheel(self, event):
         """マウスホイールでスクロール"""
         self.canvas.yview_scroll(int(-1*(event.delta/120)), "units")
@@ -1000,11 +1041,12 @@ Robocopyバックアップの実行結果をお知らせします。
         start_time = f"{self.hour_var.get()}:{self.minute_var.get()}"
         
         # スケジュール頻度に応じてコマンドを構築
-        if self.frequency_var.get() == "DAILY":
+        frequency_code = self.get_frequency_code()
+        if frequency_code == "DAILY":
             schedule_type = "/SC DAILY"
         else:  # WEEKLY
-            weekday = self.weekday_var.get()
-            schedule_type = f"/SC WEEKLY /D {weekday}"
+            weekday_code = self.get_weekday_code()
+            schedule_type = f"/SC WEEKLY /D {weekday_code}"
         
         # schtasksコマンドを構築
         cmd = f'''schtasks /CREATE /TN "{task_name}" /TR "\\"{python_path}\\" \\"{script_path}\\" --scheduled" {schedule_type} /ST {start_time} /F'''
@@ -1092,8 +1134,8 @@ Robocopyバックアップの実行結果をお知らせします。
             'wait_time': self.wait_var.get(),
             'log_file': self.log_file_var.get(),
             'custom_options': self.custom_options_var.get(),
-            'frequency': self.frequency_var.get(),
-            'weekday': self.weekday_var.get(),
+            'frequency': self.get_frequency_code(),  # 内部コードで保存
+            'weekday': self.get_weekday_code(),      # 内部コードで保存
             'hour': self.hour_var.get(),
             'minute': self.minute_var.get(),
             'email_enabled': self.email_enabled_var.get(),
@@ -1161,8 +1203,18 @@ Robocopyバックアップの実行結果をお知らせします。
             self.custom_options_var.set(config.get('custom_options', ''))
             
             # 既存の設定読み込み（変更なし）
-            self.frequency_var.set(config.get('frequency', 'DAILY'))
-            self.weekday_var.set(config.get('weekday', 'MON'))
+            # スケジュール設定の読み込み（内部コードから表示文字列に変換）
+            frequency_code = config.get('frequency', 'DAILY')
+            weekday_code = config.get('weekday', 'MON')
+            
+            frequency_display_map = {"DAILY": "毎日", "WEEKLY": "毎週"}
+            weekday_display_map = {
+                "MON": "月曜日", "TUE": "火曜日", "WED": "水曜日",
+                "THU": "木曜日", "FRI": "金曜日", "SAT": "土曜日", "SUN": "日曜日"
+            }
+            
+            self.frequency_var.set(frequency_display_map.get(frequency_code, "毎日"))
+            self.weekday_var.set(weekday_display_map.get(weekday_code, "月曜日"))
             self.hour_var.set(config.get('hour', '09'))
             self.minute_var.set(config.get('minute', '00'))
             self.email_enabled_var.set(config.get('email_enabled', False))
@@ -1187,6 +1239,8 @@ Robocopyバックアップの実行結果をお知らせします。
             self.toggle_email_settings()
             # 認証設定の状態を更新
             self.update_auth_state()
+            # 曜日選択の状態を更新
+            self.update_weekday_state()
             self.log_message("設定を読み込みました")
             
         except Exception as e:
