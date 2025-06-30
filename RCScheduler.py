@@ -13,7 +13,7 @@ class RobocopyScheduler:
     def __init__(self, root):
         self.root = root
         self.root.title("Robocopy スケジューラ (Windows Task Scheduler)")
-        self.root.geometry("800x850")
+        self.root.geometry("800x950")  # 高さを少し増やす
         
         # 設定を保存するファイル名
         self.config_file = "robocopy_config.json"
@@ -24,9 +24,184 @@ class RobocopyScheduler:
         # コピーモード用のラジオボタン変数を追加
         self.copy_mode_var = tk.StringVar(value="MIR")  # デフォルトは/MIR
         
+        # 認証情報用の変数を追加
+        self.source_auth_enabled_var = tk.BooleanVar()
+        self.source_username_var = tk.StringVar()
+        self.source_password_var = tk.StringVar()
+        self.source_domain_var = tk.StringVar()
+        
+        self.dest_auth_enabled_var = tk.BooleanVar()
+        self.dest_username_var = tk.StringVar()
+        self.dest_password_var = tk.StringVar()
+        self.dest_domain_var = tk.StringVar()
+        
+        # 認証ウィジェットのリストを初期化
+        self.source_auth_widgets = []
+        self.dest_auth_widgets = []
+        
         self.create_widgets()
         self.load_config()
         self.update_task_status()
+    
+    def is_network_path(self, path):
+        """ネットワークパスかどうかを判定"""
+        return path.startswith("\\\\") if path else False
+    
+    def update_auth_state(self):
+        """認証設定の有効/無効を更新"""
+        # コピー元の認証設定
+        source_path = self.source_var.get()
+        if self.is_network_path(source_path):
+            # ネットワークパスの場合は認証設定を有効化
+            self.enable_auth_widgets(self.source_auth_widgets)
+            self.source_auth_enabled_var.set(True)
+        else:
+            # ローカルパスの場合は認証設定を無効化
+            self.disable_auth_widgets(self.source_auth_widgets)
+            self.source_auth_enabled_var.set(False)
+        
+        # コピー先の認証設定
+        dest_path = self.dest_var.get()
+        if self.is_network_path(dest_path):
+            # ネットワークパスの場合は認証設定を有効化
+            self.enable_auth_widgets(self.dest_auth_widgets)
+            self.dest_auth_enabled_var.set(True)
+        else:
+            # ローカルパスの場合は認証設定を無効化
+            self.disable_auth_widgets(self.dest_auth_widgets)
+            self.dest_auth_enabled_var.set(False)
+    
+    def enable_auth_widgets(self, widget_list):
+        """認証設定ウィジェットを有効化"""
+        for widget in widget_list:
+            if hasattr(widget, 'configure'):
+                widget.configure(state='normal')
+    
+    def disable_auth_widgets(self, widget_list):
+        """認証設定ウィジェットを無効化"""
+        for widget in widget_list:
+            if hasattr(widget, 'configure'):
+                widget.configure(state='disabled')
+    
+    def test_network_connection(self, path_type):
+        """ネットワーク接続をテスト"""
+        if path_type == "source":
+            path = self.source_var.get()
+            username = self.source_username_var.get()
+            password = self.source_password_var.get()
+            domain = self.source_domain_var.get()
+        else:  # dest
+            path = self.dest_var.get()
+            username = self.dest_username_var.get()
+            password = self.dest_password_var.get()
+            domain = self.dest_domain_var.get()
+        
+        if not self.is_network_path(path):
+            messagebox.showwarning("警告", "ネットワークパスが指定されていません")
+            return
+        
+        if not username:
+            messagebox.showerror("エラー", "ユーザー名を入力してください")
+            return
+        
+        try:
+            # ネットワークパスからサーバー部分を抽出
+            server_path = "\\\\" + path.split("\\")[2]
+            
+            # 既存の接続を切断
+            disconnect_cmd = f'net use "{server_path}" /delete /y'
+            subprocess.run(disconnect_cmd, shell=True, capture_output=True)
+            
+            # 認証情報を構築
+            if domain:
+                user_part = f"{domain}\\{username}"
+            else:
+                user_part = username
+            
+            # net useコマンドで接続テスト
+            connect_cmd = f'net use "{server_path}" /user:"{user_part}" "{password}"'
+            
+            result = subprocess.run(connect_cmd, shell=True, capture_output=True, text=True, encoding='cp932')
+            
+            if result.returncode == 0:
+                messagebox.showinfo("接続テスト", f"{path_type}への接続に成功しました")
+                self.log_message(f"認証テスト成功: {path}")
+                
+                # テスト後は接続を切断
+                subprocess.run(disconnect_cmd, shell=True, capture_output=True)
+            else:
+                error_msg = result.stderr.strip() if result.stderr else "不明なエラー"
+                messagebox.showerror("接続テスト", f"接続に失敗しました:\n{error_msg}")
+                self.log_message(f"認証テスト失敗: {path} - {error_msg}", "error")
+                
+        except Exception as e:
+            messagebox.showerror("接続テスト", f"接続テストでエラーが発生しました:\n{str(e)}")
+            self.log_message(f"認証テストエラー: {str(e)}", "error")
+    
+    def connect_network_path(self, path, username, password, domain=""):
+        """ネットワークパスに認証情報で接続"""
+        if not self.is_network_path(path):
+            return True  # ローカルパスの場合は何もしない
+        
+        if not username:
+            return True  # 認証情報がない場合はそのまま実行
+        
+        try:
+            # ネットワークパスからサーバー部分を抽出
+            server_path = "\\\\" + path.split("\\")[2]
+            
+            # 既存の接続を切断
+            disconnect_cmd = f'net use "{server_path}" /delete /y'
+            subprocess.run(disconnect_cmd, shell=True, capture_output=True)
+            
+            # 認証情報を構築
+            if domain:
+                user_part = f"{domain}\\{username}"
+            else:
+                user_part = username
+            
+            # net useコマンドで接続
+            connect_cmd = f'net use "{server_path}" /user:"{user_part}" "{password}"'
+            
+            result = subprocess.run(connect_cmd, shell=True, capture_output=True, text=True, encoding='cp932')
+            
+            if result.returncode == 0:
+                self.log_message(f"ネットワーク接続成功: {server_path}")
+                return True
+            else:
+                error_msg = result.stderr.strip() if result.stderr else "不明なエラー"
+                self.log_message(f"ネットワーク接続失敗: {server_path} - {error_msg}", "error")
+                return False
+                
+        except Exception as e:
+            self.log_message(f"ネットワーク接続エラー: {str(e)}", "error")
+            return False
+    
+    def disconnect_network_paths(self):
+        """使用したネットワークパスの接続を切断"""
+        paths_to_disconnect = []
+        
+        # コピー元がネットワークパスの場合
+        source_path = self.source_var.get()
+        if self.is_network_path(source_path) and self.source_username_var.get():
+            server_path = "\\\\" + source_path.split("\\")[2]
+            paths_to_disconnect.append(server_path)
+        
+        # コピー先がネットワークパスの場合
+        dest_path = self.dest_var.get()
+        if self.is_network_path(dest_path) and self.dest_username_var.get():
+            server_path = "\\\\" + dest_path.split("\\")[2]
+            if server_path not in paths_to_disconnect:  # 重複チェック
+                paths_to_disconnect.append(server_path)
+        
+        # 接続を切断
+        for server_path in paths_to_disconnect:
+            try:
+                disconnect_cmd = f'net use "{server_path}" /delete /y'
+                subprocess.run(disconnect_cmd, shell=True, capture_output=True)
+                self.log_message(f"ネットワーク接続切断: {server_path}")
+            except Exception as e:
+                self.log_message(f"接続切断エラー: {server_path} - {str(e)}", "error")
     
     def create_widgets(self):
         # スクロール可能なメインフレームを作成
@@ -62,23 +237,77 @@ class RobocopyScheduler:
         # コピー元フォルダ
         ttk.Label(robocopy_frame, text="コピー元フォルダ:").grid(row=0, column=0, sticky=tk.W)
         self.source_var = tk.StringVar()
+        # パス変更時のイベントを追加
+        self.source_var.trace('w', lambda *args: self.update_auth_state())
         ttk.Entry(robocopy_frame, textvariable=self.source_var, width=50).grid(row=0, column=1, padx=5)
         ttk.Button(robocopy_frame, text="参照", 
                   command=self.browse_source).grid(row=0, column=2)
         
+        # コピー元認証設定フレーム（ネットワークパス用）
+        self.source_auth_frame = ttk.LabelFrame(robocopy_frame, text="コピー元認証設定（ネットワークパス用）", padding="5")
+        self.source_auth_frame.grid(row=1, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=5)
+        
+        # コピー元認証情報入力欄
+        ttk.Label(self.source_auth_frame, text="ユーザー名:").grid(row=0, column=0, sticky=tk.W)
+        source_username_entry = ttk.Entry(self.source_auth_frame, textvariable=self.source_username_var, width=20)
+        source_username_entry.grid(row=0, column=1, padx=5)
+        self.source_auth_widgets.append(source_username_entry)
+        
+        ttk.Label(self.source_auth_frame, text="パスワード:").grid(row=0, column=2, sticky=tk.W, padx=(10,0))
+        source_password_entry = ttk.Entry(self.source_auth_frame, textvariable=self.source_password_var, width=20, show="*")
+        source_password_entry.grid(row=0, column=3, padx=5)
+        self.source_auth_widgets.append(source_password_entry)
+        
+        ttk.Label(self.source_auth_frame, text="ドメイン:").grid(row=1, column=0, sticky=tk.W)
+        source_domain_entry = ttk.Entry(self.source_auth_frame, textvariable=self.source_domain_var, width=20)
+        source_domain_entry.grid(row=1, column=1, padx=5)
+        self.source_auth_widgets.append(source_domain_entry)
+        
+        source_test_button = ttk.Button(self.source_auth_frame, text="接続テスト", 
+                  command=lambda: self.test_network_connection("source"))
+        source_test_button.grid(row=1, column=2, columnspan=2, padx=10)
+        self.source_auth_widgets.append(source_test_button)
+        
         # コピー先フォルダ
-        ttk.Label(robocopy_frame, text="コピー先フォルダ:").grid(row=1, column=0, sticky=tk.W)
+        ttk.Label(robocopy_frame, text="コピー先フォルダ:").grid(row=2, column=0, sticky=tk.W)
         self.dest_var = tk.StringVar()
-        ttk.Entry(robocopy_frame, textvariable=self.dest_var, width=50).grid(row=1, column=1, padx=5)
+        # パス変更時のイベントを追加
+        self.dest_var.trace('w', lambda *args: self.update_auth_state())
+        ttk.Entry(robocopy_frame, textvariable=self.dest_var, width=50).grid(row=2, column=1, padx=5)
         ttk.Button(robocopy_frame, text="参照", 
-                  command=self.browse_dest).grid(row=1, column=2)
+                  command=self.browse_dest).grid(row=2, column=2)
+        
+        # コピー先認証設定フレーム（ネットワークパス用）
+        self.dest_auth_frame = ttk.LabelFrame(robocopy_frame, text="コピー先認証設定（ネットワークパス用）", padding="5")
+        self.dest_auth_frame.grid(row=3, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=5)
+        
+        # コピー先認証情報入力欄
+        ttk.Label(self.dest_auth_frame, text="ユーザー名:").grid(row=0, column=0, sticky=tk.W)
+        dest_username_entry = ttk.Entry(self.dest_auth_frame, textvariable=self.dest_username_var, width=20)
+        dest_username_entry.grid(row=0, column=1, padx=5)
+        self.dest_auth_widgets.append(dest_username_entry)
+        
+        ttk.Label(self.dest_auth_frame, text="パスワード:").grid(row=0, column=2, sticky=tk.W, padx=(10,0))
+        dest_password_entry = ttk.Entry(self.dest_auth_frame, textvariable=self.dest_password_var, width=20, show="*")
+        dest_password_entry.grid(row=0, column=3, padx=5)
+        self.dest_auth_widgets.append(dest_password_entry)
+        
+        ttk.Label(self.dest_auth_frame, text="ドメイン:").grid(row=1, column=0, sticky=tk.W)
+        dest_domain_entry = ttk.Entry(self.dest_auth_frame, textvariable=self.dest_domain_var, width=20)
+        dest_domain_entry.grid(row=1, column=1, padx=5)
+        self.dest_auth_widgets.append(dest_domain_entry)
+        
+        dest_test_button = ttk.Button(self.dest_auth_frame, text="接続テスト", 
+                  command=lambda: self.test_network_connection("dest"))
+        dest_test_button.grid(row=1, column=2, columnspan=2, padx=10)
+        self.dest_auth_widgets.append(dest_test_button)
         
         # Robocopyオプション
-        ttk.Label(robocopy_frame, text="Robocopyオプション:").grid(row=2, column=0, sticky=(tk.W, tk.N), padx=5, pady=5)
+        ttk.Label(robocopy_frame, text="Robocopyオプション:").grid(row=4, column=0, sticky=(tk.W, tk.N), padx=5, pady=5)
         
         # オプション選択用のフレーム
         options_frame = ttk.Frame(robocopy_frame)
-        options_frame.grid(row=2, column=1, columnspan=2, sticky=(tk.W, tk.E), padx=5, pady=5)
+        options_frame.grid(row=4, column=1, columnspan=2, sticky=(tk.W, tk.E), padx=5, pady=5)
         
         # コピーモード選択（ラジオボタン）
         copy_mode_frame = ttk.LabelFrame(options_frame, text="コピーモード", padding="10")
@@ -233,6 +462,10 @@ class RobocopyScheduler:
         
         # 初期状態ではメール設定を無効化
         self.toggle_email_settings()
+        
+        # 初期状態では認証設定を無効化
+        self.disable_auth_widgets(self.source_auth_widgets)
+        self.disable_auth_widgets(self.dest_auth_widgets)
         
         # 制御ボタンセクション
         button_frame = ttk.Frame(main_frame)
@@ -412,13 +645,21 @@ class RobocopyScheduler:
         """コピー元フォルダを選択"""
         folder = filedialog.askdirectory(title="コピー元フォルダを選択")
         if folder:
+            # パスの区切り文字を統一（/ → \）
+            folder = folder.replace('/', '\\')
             self.source_var.set(folder)
+            # フォルダ選択後に認証設定の状態を更新
+            self.update_auth_state()
     
     def browse_dest(self):
         """コピー先フォルダを選択"""
         folder = filedialog.askdirectory(title="コピー先フォルダを選択")
         if folder:
+            # パスの区切り文字を統一（/ → \）
+            folder = folder.replace('/', '\\')
             self.dest_var.set(folder)
+            # フォルダ選択後に認証設定の状態を更新
+            self.update_auth_state()
     
     def browse_log_file(self):
         """ログファイルの保存先を選択"""
@@ -518,6 +759,40 @@ class RobocopyScheduler:
             self.log_message("エラー: コピー元またはコピー先が指定されていません", "error")
             return False, "コピー元またはコピー先が指定されていません"
         
+        # ネットワークパスの認証を実行
+        auth_success = True
+        
+        # コピー元の認証
+        if self.is_network_path(source) and self.source_username_var.get():
+            self.log_message("コピー元ネットワークパスに接続中...")
+            if not self.connect_network_path(
+                source, 
+                self.source_username_var.get(),
+                self.source_password_var.get(),
+                self.source_domain_var.get()
+            ):
+                auth_success = False
+                error_msg = "コピー元ネットワークパスへの認証に失敗しました"
+                self.log_message(error_msg, "error")
+                return False, error_msg
+        
+        # コピー先の認証
+        if self.is_network_path(dest) and self.dest_username_var.get():
+            self.log_message("コピー先ネットワークパスに接続中...")
+            if not self.connect_network_path(
+                dest,
+                self.dest_username_var.get(),
+                self.dest_password_var.get(),
+                self.dest_domain_var.get()
+            ):
+                auth_success = False
+                error_msg = "コピー先ネットワークパスへの認証に失敗しました"
+                self.log_message(error_msg, "error")
+                return False, error_msg
+        
+        if not auth_success:
+            return False, "ネットワーク認証に失敗しました"
+        
         # Robocopyコマンドを構築
         cmd = f'robocopy "{source}" "{dest}" {options}'
         
@@ -578,6 +853,9 @@ class RobocopyScheduler:
             error_msg = f"実行エラー: {str(e)}"
             self.log_message(error_msg , "error")
             return False, error_msg
+        finally:
+            # 実行後はネットワーク接続を切断
+            self.disconnect_network_paths()
     
     def send_email(self, success, message):
         """メールを送信"""
@@ -748,7 +1026,16 @@ Robocopyバックアップの実行結果をお知らせします。
             'sender_password': self.sender_password_var.get(),
             'recipient_email': self.recipient_email_var.get(),
             'history_enabled': self.history_enabled_var.get(),
-            'use_ssl': self.use_ssl_var.get()
+            'use_ssl': self.use_ssl_var.get(),
+            # 認証情報を追加
+            'source_auth_enabled': self.source_auth_enabled_var.get(),
+            'source_username': self.source_username_var.get(),
+            'source_password': self.source_password_var.get(),
+            'source_domain': self.source_domain_var.get(),
+            'dest_auth_enabled': self.dest_auth_enabled_var.get(),
+            'dest_username': self.dest_username_var.get(),
+            'dest_password': self.dest_password_var.get(),
+            'dest_domain': self.dest_domain_var.get()
         }
         
         try:
@@ -801,7 +1088,19 @@ Robocopyバックアップの実行結果をお知らせします。
             self.history_enabled_var.set(config.get('history_enabled', False))
             self.use_ssl_var.set(config.get('use_ssl', False))
             
+            # 認証情報の読み込み
+            self.source_auth_enabled_var.set(config.get('source_auth_enabled', False))
+            self.source_username_var.set(config.get('source_username', ''))
+            self.source_password_var.set(config.get('source_password', ''))
+            self.source_domain_var.set(config.get('source_domain', ''))
+            self.dest_auth_enabled_var.set(config.get('dest_auth_enabled', False))
+            self.dest_username_var.set(config.get('dest_username', ''))
+            self.dest_password_var.set(config.get('dest_password', ''))
+            self.dest_domain_var.set(config.get('dest_domain', ''))
+            
             self.toggle_email_settings()
+            # 認証設定の状態を更新
+            self.update_auth_state()
             self.log_message("設定を読み込みました")
             
         except Exception as e:
