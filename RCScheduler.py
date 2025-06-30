@@ -29,9 +29,31 @@ class RobocopyScheduler:
         self.update_task_status()
     
     def create_widgets(self):
-        # メインフレーム
-        main_frame = ttk.Frame(self.root, padding="10")
-        main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        # スクロール可能なメインフレームを作成
+        # Canvasとスクロールバーを作成
+        self.canvas = tk.Canvas(self.root)
+        self.scrollbar = ttk.Scrollbar(self.root, orient="vertical", command=self.canvas.yview)
+        self.scrollable_frame = ttk.Frame(self.canvas, padding="10")
+        
+        # スクロール可能フレームの設定
+        self.scrollable_frame.bind(
+            "<Configure>",
+            lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+        )
+        
+        # Canvasにフレームを配置
+        self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
+        self.canvas.configure(yscrollcommand=self.scrollbar.set)
+        
+        # CanvasとScrollbarを配置
+        self.canvas.pack(side="left", fill="both", expand=True)
+        self.scrollbar.pack(side="right", fill="y")
+        
+        # マウスホイールでスクロールできるようにする
+        self.canvas.bind("<MouseWheel>", self._on_mousewheel)
+        
+        # main_frameをscrollable_frameに変更
+        main_frame = self.scrollable_frame
         
         # Robocopy設定セクション
         robocopy_frame = ttk.LabelFrame(main_frame, text="Robocopy設定", padding="10")
@@ -265,6 +287,10 @@ class RobocopyScheduler:
         self.status_var = tk.StringVar(value="準備完了")
         status_bar = ttk.Label(main_frame, textvariable=self.status_var, relief=tk.SUNKEN)
         status_bar.grid(row=7, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
+    
+    def _on_mousewheel(self, event):
+        """マウスホイールでスクロール"""
+        self.canvas.yview_scroll(int(-1*(event.delta/120)), "units")
     
     def check_task_history(self):
         """現在のタスク履歴設定を確認"""
