@@ -17,7 +17,8 @@ class RobocopyScheduler:
         
         # 設定を保存するファイル名
         self.config_file = "robocopy_config.json"
-        self.task_name = "RobocopyBackupTask"
+        # タスク名を変数として管理（デフォルト値は後で設定）
+        self.task_name_var = tk.StringVar(value="RobocopyBackupTask")
         
         # Robocopyオプション用の変数
         self.option_vars = {}
@@ -42,6 +43,43 @@ class RobocopyScheduler:
         self.create_widgets()
         self.load_config()
         self.update_task_status()
+    def generate_task_name_from_dest(self):
+        """コピー先フォルダからタスク名を自動生成"""
+        dest_path = self.dest_var.get()
+        if not dest_path:
+            return "RobocopyBackupTask"
+        
+        try:
+            # パスの最後の部分（フォルダ名）を取得
+            folder_name = os.path.basename(dest_path.rstrip('\\'))
+            
+            # 空の場合はドライブ名などを使用
+            if not folder_name:
+                folder_name = dest_path.replace(':', '').replace('\\', '_')
+            
+            # タスク名に使用できない文字を除去・置換
+            invalid_chars = '<>:"/\\|?*'
+            for char in invalid_chars:
+                folder_name = folder_name.replace(char, '_')
+            
+            # 空白を含む場合はアンダースコアに置換
+            folder_name = folder_name.replace(' ', '_')
+            
+            # 最大長制限（Windowsタスク名は最大238文字）
+            if len(folder_name) > 50:
+                folder_name = folder_name[:50]
+            
+            return f"{folder_name}-Robocopy"
+            
+        except Exception as e:
+            self.log_message(f"タスク名生成エラー: {str(e)}", "error")
+            return "RobocopyBackupTask"
+
+    def update_task_name_from_dest(self, *args):
+        """コピー先フォルダ変更時にタスク名を自動更新"""
+        if self.dest_var.get():
+            new_task_name = self.generate_task_name_from_dest()
+            self.task_name_var.set(new_task_name)
     
     def is_network_path(self, path):
         """ネットワークパスかどうかを判定"""
@@ -388,6 +426,27 @@ class RobocopyScheduler:
         # スケジュール設定セクション
         schedule_frame = ttk.LabelFrame(main_frame, text="スケジュール設定", padding="10")
         schedule_frame.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
+        # タスク名設定（スケジュール設定の最後に追加）
+        task_name_frame = ttk.Frame(schedule_frame)
+        task_name_frame.grid(row=3, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
+        
+        ttk.Label(task_name_frame, text="タスク名:").grid(row=0, column=0, sticky=tk.W)
+        ttk.Entry(task_name_frame, textvariable=self.task_name_var, width=40).grid(row=0, column=1, padx=5, sticky=(tk.W, tk.E))
+        ttk.Button(task_name_frame, text="自動生成", 
+                  command=self.update_task_name_from_dest).grid(row=0, column=2, padx=5)
+        
+        # 説明ラベル
+        ttk.Label(task_name_frame, text="※ コピー先フォルダを選択すると自動で生成されます", 
+                 font=('', 8), foreground='gray').grid(row=1, column=1, sticky=tk.W, padx=5)
+
+        # コピー先フォルダ
+        ttk.Label(robocopy_frame, text="コピー先フォルダ:").grid(row=2, column=0, sticky=tk.W)
+        self.dest_var = tk.StringVar()
+        # パス変更時のイベントを追加（タスク名自動生成も含める）
+        self.dest_var.trace('w', lambda *args: (self.update_auth_state(), self.update_task_name_from_dest()))
+        ttk.Entry(robocopy_frame, textvariable=self.dest_var, width=50).grid(row=2, column=1, padx=5)
+        ttk.Button(robocopy_frame, text="参照", 
+                  command=self.browse_dest).grid(row=2, column=2)
         
         # 実行頻度
         ttk.Label(schedule_frame, text="実行頻度:").grid(row=0, column=0, sticky=tk.W)
@@ -660,6 +719,8 @@ class RobocopyScheduler:
             self.dest_var.set(folder)
             # フォルダ選択後に認証設定の状態を更新
             self.update_auth_state()
+            # タスク名を自動生成
+            self.update_task_name_from_dest()
     
     def browse_log_file(self):
         """ログファイルの保存先を選択"""
@@ -923,6 +984,11 @@ Robocopyバックアップの実行結果をお知らせします。
             messagebox.showerror("エラー", "コピー元とコピー先を設定してください")
             return
         
+        task_name = self.task_name_var.get().strip()
+        if not task_name:
+            messagebox.showerror("エラー", "タスク名を入力してください")
+            return
+        
         # 設定を保存してからタスクを作成
         self.save_config()
         
@@ -941,14 +1007,14 @@ Robocopyバックアップの実行結果をお知らせします。
             schedule_type = f"/SC WEEKLY /D {weekday}"
         
         # schtasksコマンドを構築
-        cmd = f'''schtasks /CREATE /TN "{self.task_name}" /TR "\\"{python_path}\\" \\"{script_path}\\" --scheduled" {schedule_type} /ST {start_time} /F'''
+        cmd = f'''schtasks /CREATE /TN "{task_name}" /TR "\\"{python_path}\\" \\"{script_path}\\" --scheduled" {schedule_type} /ST {start_time} /F'''
         
         try:
             result = subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding='cp932')
             
             if result.returncode == 0:
-                self.log_message(f"タスクを作成しました: {self.task_name}")
-                messagebox.showinfo("成功", f"スケジュールタスク '{self.task_name}' を作成しました")
+                self.log_message(f"タスクを作成しました: {task_name}")
+                messagebox.showinfo("成功", f"スケジュールタスク '{task_name}' を作成しました")
                 self.update_task_status()
             else:
                 error_msg = f"タスク作成エラー: {result.stderr}"
@@ -959,17 +1025,22 @@ Robocopyバックアップの実行結果をお知らせします。
             error_msg = f"タスク作成エラー: {str(e)}"
             self.log_message(error_msg , "error")
             messagebox.showerror("エラー", error_msg)
-    
+
     def delete_scheduled_task(self):
         """スケジュールされたタスクを削除"""
-        cmd = f'schtasks /DELETE /TN "{self.task_name}" /F'
+        task_name = self.task_name_var.get().strip()
+        if not task_name:
+            messagebox.showerror("エラー", "タスク名が入力されていません")
+            return
+            
+        cmd = f'schtasks /DELETE /TN "{task_name}" /F'
         
         try:
             result = subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding='cp932')
             
             if result.returncode == 0:
-                self.log_message(f"タスクを削除しました: {self.task_name}")
-                messagebox.showinfo("成功", f"スケジュールタスク '{self.task_name}' を削除しました")
+                self.log_message(f"タスクを削除しました: {task_name}")
+                messagebox.showinfo("成功", f"スケジュールタスク '{task_name}' を削除しました")
                 self.update_task_status()
             else:
                 error_msg = f"タスク削除エラー: {result.stderr}"
@@ -980,10 +1051,15 @@ Robocopyバックアップの実行結果をお知らせします。
             error_msg = f"タスク削除エラー: {str(e)}"
             self.log_message(error_msg , "error")
             messagebox.showerror("エラー", error_msg)
-    
+
     def update_task_status(self):
         """タスクのステータスを更新"""
-        cmd = f'schtasks /QUERY /TN "{self.task_name}"'
+        task_name = self.task_name_var.get().strip()
+        if not task_name:
+            self.task_status_var.set("タスク名が未設定")
+            return
+            
+        cmd = f'schtasks /QUERY /TN "{task_name}"'
         
         try:
             result = subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding='cp932')
@@ -1009,7 +1085,8 @@ Robocopyバックアップの実行結果をお知らせします。
         config = {
             'source': self.source_var.get(),
             'dest': self.dest_var.get(),
-            'copy_mode': self.copy_mode_var.get(),  # ラジオボタンの値を追加
+            'task_name': self.task_name_var.get(),  # タスク名を追加
+            'copy_mode': self.copy_mode_var.get(),
             'robocopy_options': {var_name: var.get() for var_name, var in self.option_vars.items()},
             'retry_count': self.retry_var.get(),
             'wait_time': self.wait_var.get(),
@@ -1048,7 +1125,7 @@ Robocopyバックアップの実行結果をお知らせします。
             error_msg = f"設定保存エラー: {str(e)}"
             self.log_message(error_msg , "error")
             messagebox.showerror("エラー", error_msg)
-    
+
     def load_config(self):
         """設定をファイルから読み込み"""
         if not os.path.exists(self.config_file):
@@ -1061,9 +1138,18 @@ Robocopyバックアップの実行結果をお知らせします。
             self.source_var.set(config.get('source', ''))
             self.dest_var.set(config.get('dest', ''))
             
+            # タスク名の読み込み（デフォルト値を設定）
+            saved_task_name = config.get('task_name', '')
+            if saved_task_name:
+                self.task_name_var.set(saved_task_name)
+            else:
+                # 保存されたタスク名がない場合は自動生成
+                self.update_task_name_from_dest()
+            
             # コピーモードの読み込み
             self.copy_mode_var.set(config.get('copy_mode', 'MIR'))
             
+            # 以下は既存のコードと同じ...
             # オプション設定の読み込み
             robocopy_options = config.get('robocopy_options', {})
             for var_name, var in self.option_vars.items():
