@@ -19,7 +19,10 @@ class RobocopyScheduler:
         self.config_file = "robocopy_config.json"
         self.task_name = "RobocopyBackupTask"
         
+        # Robocopyオプション用の変数
         self.option_vars = {}
+        # コピーモード用のラジオボタン変数を追加
+        self.copy_mode_var = tk.StringVar(value="MIR")  # デフォルトは/MIR
         
         self.create_widgets()
         self.load_config()
@@ -55,14 +58,26 @@ class RobocopyScheduler:
         options_frame = ttk.Frame(robocopy_frame)
         options_frame.grid(row=2, column=1, columnspan=2, sticky=(tk.W, tk.E), padx=5, pady=5)
         
-        # オプション定義（チェックボックス、オプション名、説明）
+        # コピーモード選択（ラジオボタン）
+        copy_mode_frame = ttk.LabelFrame(options_frame, text="コピーモード", padding="10")
+        copy_mode_frame.grid(row=0, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
+        
+        ttk.Radiobutton(copy_mode_frame, text="/MIR - ミラーモード（削除も同期）", 
+                       variable=self.copy_mode_var, value="MIR").grid(row=0, column=0, sticky=tk.W, pady=2)
+        ttk.Radiobutton(copy_mode_frame, text="/E - サブディレクトリコピー（削除なし）", 
+                       variable=self.copy_mode_var, value="E").grid(row=1, column=0, sticky=tk.W, pady=2)
+        
+        # その他のオプション（チェックボックス）
+        other_options_frame = ttk.LabelFrame(options_frame, text="その他のオプション", padding="10")
+        other_options_frame.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
+        
+        # オプション定義（チェックボックス用）- /SECを追加
         options_config = [
-            ("mirror_mode", "/MIR", "ミラーモード（削除も同期）"),
-            ("copy_subdirs", "/E", "空のディレクトリも含めてコピー"),
             ("no_progress", "/NP", "進行状況を表示しない"),
             ("no_dir_list", "/NDL", "ディレクトリリストを表示しない"),
+            ("sec", "/SEC", "NTFS権限もコピー"),
             ("list_only", "/L", "テストモード（実際にコピーしない）"),
-            ("enable_log", "/LOG", "ログファイルに記録する"),
+            ("enable_log", "LOG", "ログファイルに記録する"),
         ]
         
         # チェックボックスを作成
@@ -71,24 +86,16 @@ class RobocopyScheduler:
             row = i // 2
             col = i % 2
             
-            frame = ttk.Frame(options_frame)
+            frame = ttk.Frame(other_options_frame)
             frame.grid(row=row, column=col, sticky=tk.W, padx=10, pady=2)
             
-            checkbox = ttk.Checkbutton(frame, variable=self.option_vars[var_name])
-            checkbox.grid(row=0, column=0)
-            
-            # /MIRと/Eが同時に選択されないよう制御
-            if var_name == "mirror_mode":
-                checkbox.configure(command=lambda: self.on_mirror_mode_changed())
-            elif var_name == "copy_subdirs":
-                checkbox.configure(command=lambda: self.on_copy_subdirs_changed())
-            
+            ttk.Checkbutton(frame, variable=self.option_vars[var_name]).grid(row=0, column=0)
             ttk.Label(frame, text=f"{option}").grid(row=0, column=1, padx=(5, 0), sticky=tk.W)
             ttk.Label(frame, text=f"({description})", font=('', 8)).grid(row=1, column=1, padx=(5, 0), sticky=tk.W)
         
         # リトライ・ログ設定フレーム
-        config_frame = ttk.Frame(options_frame)
-        config_frame.grid(row=len(options_config)//2 + 1, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(10, 0))
+        config_frame = ttk.LabelFrame(options_frame, text="詳細設定", padding="10")
+        config_frame.grid(row=2, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
         
         # リトライ設定
         retry_frame = ttk.Frame(config_frame)
@@ -119,12 +126,12 @@ class RobocopyScheduler:
         self.custom_options_var = tk.StringVar()
         ttk.Entry(custom_frame, textvariable=self.custom_options_var, width=50).grid(row=0, column=1, padx=5, sticky=(tk.W, tk.E))
         
-        # デフォルト設定：全オプションを有効にする（/MIRと/Eは排他的なので/MIRのみ）
-        self.option_vars["mirror_mode"].set(True)      # /MIR
-        # self.option_vars["copy_subdirs"].set(True)   # /E（/MIRと排他的なのでコメントアウト）
+        # デフォルト設定：全オプションを有効にする
+        self.copy_mode_var.set("MIR")  # デフォルトは/MIR
         self.option_vars["no_progress"].set(True)      # /NP
         self.option_vars["no_dir_list"].set(True)      # /NDL
-        self.option_vars["list_only"].set(True)        # /L
+        self.option_vars["sec"].set(False)              # /SEC（追加）
+        self.option_vars["list_only"].set(True)        # /L（テストモード）
         self.option_vars["enable_log"].set(True)       # LOG
         
         # スケジュール設定セクション
@@ -397,18 +404,6 @@ class RobocopyScheduler:
         if file_path:
             self.log_file_var.set(file_path)
     
-    def on_mirror_mode_changed(self):
-        """/MIRが選択されたときの処理"""
-        if self.option_vars["mirror_mode"].get():
-            # /MIRが選択されたら/Eを無効化
-            self.option_vars["copy_subdirs"].set(False)
-    
-    def on_copy_subdirs_changed(self):
-        """/Eが選択されたときの処理"""
-        if self.option_vars["copy_subdirs"].get():
-            # /Eが選択されたら/MIRを無効化
-            self.option_vars["mirror_mode"].set(False)
-    
     def toggle_email_settings(self):
         """メール設定の有効/無効を切り替え"""
         if self.email_enabled_var.get():
@@ -441,18 +436,23 @@ class RobocopyScheduler:
         """選択されたオプションからRobocopyのオプション文字列を構築"""
         options = []
         
-        # チェックボックスで選択されたオプションを追加
-        if self.option_vars["mirror_mode"].get():
+        # コピーモードを追加（ラジオボタンから取得）
+        copy_mode = self.copy_mode_var.get()
+        if copy_mode == "MIR":
             options.append("/MIR")
-        
-        if self.option_vars["copy_subdirs"].get():
+        elif copy_mode == "E":
             options.append("/E")
         
+        # その他のチェックボックスで選択されたオプションを追加
         if self.option_vars["no_progress"].get():
             options.append("/NP")
         
         if self.option_vars["no_dir_list"].get():
             options.append("/NDL")
+        
+        # /SECオプションを追加
+        if self.option_vars["sec"].get():
+            options.append("/SEC")
         
         if self.option_vars["list_only"].get():
             options.append("/L")
@@ -705,10 +705,11 @@ Robocopyバックアップの実行結果をお知らせします。
         config = {
             'source': self.source_var.get(),
             'dest': self.dest_var.get(),
+            'copy_mode': self.copy_mode_var.get(),  # ラジオボタンの値を追加
             'robocopy_options': {var_name: var.get() for var_name, var in self.option_vars.items()},
             'retry_count': self.retry_var.get(),
             'wait_time': self.wait_var.get(),
-            'log_file': self.log_file_var.get(),  # 追加
+            'log_file': self.log_file_var.get(),
             'custom_options': self.custom_options_var.get(),
             'frequency': self.frequency_var.get(),
             'weekday': self.weekday_var.get(),
@@ -747,6 +748,9 @@ Robocopyバックアップの実行結果をお知らせします。
             self.source_var.set(config.get('source', ''))
             self.dest_var.set(config.get('dest', ''))
             
+            # コピーモードの読み込み
+            self.copy_mode_var.set(config.get('copy_mode', 'MIR'))
+            
             # オプション設定の読み込み
             robocopy_options = config.get('robocopy_options', {})
             for var_name, var in self.option_vars.items():
@@ -754,7 +758,7 @@ Robocopyバックアップの実行結果をお知らせします。
             
             self.retry_var.set(config.get('retry_count', '1'))
             self.wait_var.set(config.get('wait_time', '1'))
-            self.log_file_var.set(config.get('log_file', 'robocopy_log.txt'))  # 追加
+            self.log_file_var.set(config.get('log_file', 'robocopy_log.txt'))
             self.custom_options_var.set(config.get('custom_options', ''))
             
             # 既存の設定読み込み（変更なし）
