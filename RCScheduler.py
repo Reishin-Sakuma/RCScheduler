@@ -1020,7 +1020,7 @@ Robocopyバックアップの実行結果をお知らせします。
         self.status_var.set("実行完了" if success else "実行エラー")
     
     def create_scheduled_task(self):
-        """Windowsタスクスケジューラにタスクを作成"""
+        """Windowsタスクスケジューラにタスクを作成（バッチファイル版）"""
         if not self.source_var.get() or not self.dest_var.get():
             messagebox.showerror("エラー", "コピー元とコピー先を設定してください")
             return
@@ -1030,68 +1030,128 @@ Robocopyバックアップの実行結果をお知らせします。
             messagebox.showerror("エラー", "タスク名を入力してください")
             return
         
-        # 設定を保存してからタスクを作成
-        self.save_config()
-        
-        # 現在のスクリプトのパスを取得
-        script_path = os.path.abspath(__file__)
-        python_path = sys.executable
-        
-        # タスクの実行時刻
-        start_time = f"{self.hour_var.get()}:{self.minute_var.get()}"
-        
-        # スケジュール頻度に応じてコマンドを構築
-        frequency_code = self.get_frequency_code()
-        if frequency_code == "DAILY":
-            schedule_type = "/SC DAILY"
-        else:  # WEEKLY
-            weekday_code = self.get_weekday_code()
-            schedule_type = f"/SC WEEKLY /D {weekday_code}"
-        
-        # schtasksコマンドを構築
-        cmd = f'''schtasks /CREATE /TN "{task_name}" /TR "\\"{python_path}\\" \\"{script_path}\\" --scheduled" {schedule_type} /ST {start_time} /F'''
-        
         try:
+            # 設定を保存してからタスクを作成
+            self.save_config()
+            
+            # バッチファイルを生成
+            self.log_message("バッチファイルを生成中...")
+            batch_path = self.generate_batch_script(task_name)
+            
+            # タスクの実行時刻
+            start_time = f"{self.hour_var.get()}:{self.minute_var.get()}"
+            
+            # スケジュール頻度に応じてコマンドを構築
+            frequency_code = self.get_frequency_code()
+            if frequency_code == "DAILY":
+                schedule_type = "/SC DAILY"
+            else:  # WEEKLY
+                weekday_code = self.get_weekday_code()
+                schedule_type = f"/SC WEEKLY /D {weekday_code}"
+            
+            # schtasksコマンドを構築（バッチファイルを実行するように変更）
+            cmd = f'''schtasks /CREATE /TN "{task_name}" /TR "\\"{batch_path}\\"" {schedule_type} /ST {start_time} /F'''
+            
+            self.log_message("タスクスケジューラに登録中...")
             result = subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding='cp932')
             
             if result.returncode == 0:
                 self.log_message(f"タスクを作成しました: {task_name}")
-                messagebox.showinfo("成功", f"スケジュールタスク '{task_name}' を作成しました")
+                self.log_message(f"実行ファイル: {batch_path}")
+                messagebox.showinfo("成功", 
+                    f"スケジュールタスク '{task_name}' を作成しました\n\n"
+                    f"生成されたファイル:\n"
+                    f"・バッチファイル: {os.path.basename(batch_path)}\n"
+                    f"{'・PowerShellスクリプト: ' + os.path.basename(self.generate_powershell_mail_script()) if self.email_enabled_var.get() else ''}")
                 self.update_task_status()
             else:
                 error_msg = f"タスク作成エラー: {result.stderr}"
-                self.log_message(error_msg , "error")
+                self.log_message(error_msg, "error")
                 messagebox.showerror("エラー", error_msg)
                 
         except Exception as e:
             error_msg = f"タスク作成エラー: {str(e)}"
-            self.log_message(error_msg , "error")
+            self.log_message(error_msg, "error")
             messagebox.showerror("エラー", error_msg)
 
     def delete_scheduled_task(self):
-        """スケジュールされたタスクを削除"""
+        """スケジュールされたタスクを削除（関連ファイルも削除）"""
         task_name = self.task_name_var.get().strip()
         if not task_name:
             messagebox.showerror("エラー", "タスク名が入力されていません")
             return
-            
-        cmd = f'schtasks /DELETE /TN "{task_name}" /F'
         
+        # 削除確認
+        response = messagebox.askyesno("確認", 
+            f"タスク '{task_name}' とその関連ファイルを削除しますか？\n\n"
+            f"削除されるファイル:\n"
+            f"・{task_name}.bat\n"
+            f"・{task_name}_mail.ps1（存在する場合）")
+        
+        if not response:
+            return
+            
         try:
+            # タスクスケジューラからタスクを削除
+            cmd = f'schtasks /DELETE /TN "{task_name}" /F'
             result = subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding='cp932')
             
+            task_deleted = False
             if result.returncode == 0:
                 self.log_message(f"タスクを削除しました: {task_name}")
-                messagebox.showinfo("成功", f"スケジュールタスク '{task_name}' を削除しました")
-                self.update_task_status()
+                task_deleted = True
             else:
+                # タスクが存在しない場合でもファイル削除は続行
                 error_msg = f"タスク削除エラー: {result.stderr}"
-                self.log_message(error_msg , "error")
-                messagebox.showerror("エラー", error_msg)
-                
+                self.log_message(error_msg, "error")
+            
+            # 関連ファイルを削除
+            files_deleted = []
+            files_failed = []
+            
+            # バッチファイルを削除
+            batch_file = f"{task_name}.bat"
+            if os.path.exists(batch_file):
+                try:
+                    os.remove(batch_file)
+                    files_deleted.append(batch_file)
+                    self.log_message(f"バッチファイルを削除しました: {batch_file}")
+                except Exception as e:
+                    files_failed.append(f"{batch_file} ({str(e)})")
+                    self.log_message(f"バッチファイル削除エラー: {batch_file} - {str(e)}", "error")
+            
+            # PowerShellスクリプトを削除
+            ps_file = f"{task_name}_mail.ps1"
+            if os.path.exists(ps_file):
+                try:
+                    os.remove(ps_file)
+                    files_deleted.append(ps_file)
+                    self.log_message(f"PowerShellスクリプトを削除しました: {ps_file}")
+                except Exception as e:
+                    files_failed.append(f"{ps_file} ({str(e)})")
+                    self.log_message(f"PowerShellスクリプト削除エラー: {ps_file} - {str(e)}", "error")
+            
+            # 結果をユーザーに通知
+            message_parts = []
+            if task_deleted:
+                message_parts.append(f"スケジュールタスク '{task_name}' を削除しました")
+            
+            if files_deleted:
+                message_parts.append(f"削除されたファイル:\n" + "\n".join([f"・{f}" for f in files_deleted]))
+            
+            if files_failed:
+                message_parts.append(f"削除に失敗したファイル:\n" + "\n".join([f"・{f}" for f in files_failed]))
+            
+            if task_deleted or files_deleted:
+                messagebox.showinfo("削除完了", "\n\n".join(message_parts))
+            else:
+                messagebox.showwarning("警告", "削除対象が見つかりませんでした")
+            
+            self.update_task_status()
+            
         except Exception as e:
-            error_msg = f"タスク削除エラー: {str(e)}"
-            self.log_message(error_msg , "error")
+            error_msg = f"削除処理エラー: {str(e)}"
+            self.log_message(error_msg, "error")
             messagebox.showerror("エラー", error_msg)
 
     def update_task_status(self):
@@ -1246,36 +1306,273 @@ Robocopyバックアップの実行結果をお知らせします。
         except Exception as e:
             self.log_message(f"設定読み込みエラー: {str(e)}" , "error")
 
-def scheduled_execution():
-    """スケジュール実行用の関数（コマンドライン引数で呼び出される）"""
-    scheduler = RobocopyScheduler(None)
-    
-    # 設定を読み込み
-    scheduler.load_config()
-    
-    # Robocopyを実行
-    success, message = scheduler.run_robocopy()
-    
-    # メール送信（設定されている場合）
-    if scheduler.email_enabled_var.get():
-        scheduler.send_email(success, message)
-    
-    # ログファイルに結果を記録
-    log_file = "robocopy_schedule_log.txt"
-    with open(log_file, 'a', encoding='utf-8') as f:
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        f.write(f"[{timestamp}] {'成功' if success else '失敗'}: {message}\n")
+    def generate_batch_script(self, task_name):
+        """タスクスケジューラ用のバッチファイルを生成"""
+        try:
+            batch_filename = f"{task_name}.bat"
+            batch_path = os.path.abspath(batch_filename)
+            
+            # バッチファイルの内容を構築
+            batch_content = self.build_batch_content()
+            
+            # バッチファイルを作成
+            with open(batch_path, 'w', encoding='cp932') as f:
+                f.write(batch_content)
+            
+            self.log_message(f"バッチファイルを生成しました: {batch_path}")
+            return batch_path
+            
+        except Exception as e:
+            error_msg = f"バッチファイル生成エラー: {str(e)}"
+            self.log_message(error_msg, "error")
+            raise
+
+    def build_batch_content(self):
+        """バッチファイルの内容を構築"""
+        source = self.source_var.get()
+        dest = self.dest_var.get()
+        options = self.build_robocopy_options()
+        
+        # ログファイルのパス（絶対パスに変換）
+        log_file = os.path.abspath(self.log_file_var.get()) if self.log_file_var.get() else os.path.abspath("robocopy_schedule_log.txt")
+        
+        batch_lines = [
+            "@echo off",
+            "setlocal enabledelayedexpansion",
+            "",
+            ":: ===========================================",
+            ":: Robocopy自動バックアップスクリプト",
+            f":: 生成日時: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            ":: ===========================================",
+            "",
+            "set ERROR_OCCURRED=0",
+            "set LOG_FILE=\"" + log_file + "\"",
+            "",
+            ":: ログファイルにヘッダーを出力",
+            f"echo [%date% %time%] バックアップ開始 >> %LOG_FILE%",
+            f"echo コピー元: {source} >> %LOG_FILE%",
+            f"echo コピー先: {dest} >> %LOG_FILE%",
+            "",
+        ]
+        
+        # ネットワーク認証（コピー元）
+        if self.is_network_path(source) and self.source_username_var.get():
+            server_path = "\\\\" + source.split("\\")[2]
+            username = self.source_username_var.get()
+            password = self.source_password_var.get()
+            domain = self.source_domain_var.get()
+            
+            if domain:
+                user_part = f"{domain}\\{username}"
+            else:
+                user_part = username
+                
+            batch_lines.extend([
+                ":: コピー元ネットワーク認証",
+                f"echo [%date% %time%] コピー元ネットワーク認証中... >> %LOG_FILE%",
+                f"net use \"{server_path}\" /delete /y >nul 2>&1",
+                f"net use \"{server_path}\" /user:\"{user_part}\" \"{password}\"",
+                "if %errorlevel% neq 0 (",
+                "    echo [%date% %time%] ERROR: コピー元ネットワーク認証に失敗 >> %LOG_FILE%",
+                "    set ERROR_OCCURRED=1",
+                "    goto :CLEANUP",
+                ")",
+                f"echo [%date% %time%] コピー元ネットワーク認証成功 >> %LOG_FILE%",
+                "",
+            ])
+        
+        # ネットワーク認証（コピー先）
+        if self.is_network_path(dest) and self.dest_username_var.get():
+            server_path = "\\\\" + dest.split("\\")[2]
+            username = self.dest_username_var.get()
+            password = self.dest_password_var.get()
+            domain = self.dest_domain_var.get()
+            
+            if domain:
+                user_part = f"{domain}\\{username}"
+            else:
+                user_part = username
+                
+            batch_lines.extend([
+                ":: コピー先ネットワーク認証",
+                f"echo [%date% %time%] コピー先ネットワーク認証中... >> %LOG_FILE%",
+                f"net use \"{server_path}\" /delete /y >nul 2>&1",
+                f"net use \"{server_path}\" /user:\"{user_part}\" \"{password}\"",
+                "if %errorlevel% neq 0 (",
+                "    echo [%date% %time%] ERROR: コピー先ネットワーク認証に失敗 >> %LOG_FILE%",
+                "    set ERROR_OCCURRED=1",
+                "    goto :CLEANUP",
+                ")",
+                f"echo [%date% %time%] コピー先ネットワーク認証成功 >> %LOG_FILE%",
+                "",
+            ])
+        
+        # Robocopyコマンド実行
+        batch_lines.extend([
+            ":: Robocopy実行",
+            f"echo [%date% %time%] Robocopy実行開始 >> %LOG_FILE%",
+            f"robocopy \"{source}\" \"{dest}\" {options} >> %LOG_FILE% 2>&1",
+            "set ROBOCOPY_EXIT_CODE=%errorlevel%",
+            "",
+            ":: Robocopy結果判定（0-7は正常、8以上はエラー）",
+            "if %ROBOCOPY_EXIT_CODE% LSS 8 (",
+            "    echo [%date% %time%] Robocopy実行成功 ^(戻り値: %ROBOCOPY_EXIT_CODE%^) >> %LOG_FILE%",
+            "    set BACKUP_SUCCESS=1",
+            ") else (",
+            "    echo [%date% %time%] Robocopy実行失敗 ^(戻り値: %ROBOCOPY_EXIT_CODE%^) >> %LOG_FILE%",
+            "    set BACKUP_SUCCESS=0",
+            "    set ERROR_OCCURRED=1",
+            ")",
+            "",
+        ])
+        
+        # メール送信（設定されている場合）
+        if self.email_enabled_var.get():
+            powershell_script = self.generate_powershell_mail_script()
+            batch_lines.extend([
+                ":: メール送信",
+                f"echo [%date% %time%] メール送信中... >> %LOG_FILE%",
+                f"powershell -ExecutionPolicy Bypass -File \"{powershell_script}\" %BACKUP_SUCCESS% >> %LOG_FILE% 2>&1",
+                "if %errorlevel% neq 0 (",
+                "    echo [%date% %time%] WARNING: メール送信に失敗 >> %LOG_FILE%",
+                ") else (",
+                "    echo [%date% %time%] メール送信完了 >> %LOG_FILE%",
+                ")",
+                "",
+            ])
+        
+        # クリーンアップ
+        cleanup_lines = [
+            ":CLEANUP",
+            ":: ネットワーク接続切断",
+        ]
+        
+        # コピー元のネットワーク切断
+        if self.is_network_path(source) and self.source_username_var.get():
+            server_path = "\\\\" + source.split("\\")[2]
+            cleanup_lines.extend([
+                f"net use \"{server_path}\" /delete /y >nul 2>&1",
+                f"echo [%date% %time%] コピー元ネットワーク接続切断 >> %LOG_FILE%",
+            ])
+        
+        # コピー先のネットワーク切断
+        if self.is_network_path(dest) and self.dest_username_var.get():
+            server_path = "\\\\" + dest.split("\\")[2]
+            # 同じサーバーでない場合のみ切断
+            source_server = "\\\\" + source.split("\\")[2] if self.is_network_path(source) else ""
+            if server_path != source_server:
+                cleanup_lines.extend([
+                    f"net use \"{server_path}\" /delete /y >nul 2>&1",
+                    f"echo [%date% %time%] コピー先ネットワーク接続切断 >> %LOG_FILE%",
+                ])
+        
+        cleanup_lines.extend([
+            "",
+            ":: 結果出力",
+            "if %ERROR_OCCURRED% equ 0 (",
+            "    echo [%date% %time%] バックアップ完了 >> %LOG_FILE%",
+            ") else (",
+            "    echo [%date% %time%] バックアップ中にエラーが発生しました >> %LOG_FILE%",
+            ")",
+            "",
+            "exit /b %ERROR_OCCURRED%"
+        ])
+        
+        batch_lines.extend(cleanup_lines)
+        
+        return "\n".join(batch_lines)
+
+    def generate_powershell_mail_script(self):
+        """メール送信用のPowerShellスクリプトを生成"""
+        try:
+            ps_filename = f"{self.task_name_var.get()}_mail.ps1"
+            ps_path = os.path.abspath(ps_filename)
+            
+            smtp_server = self.smtp_server_var.get()
+            smtp_port = self.smtp_port_var.get()
+            sender_email = self.sender_email_var.get()
+            sender_password = self.sender_password_var.get()
+            recipient_email = self.recipient_email_var.get()
+            use_ssl = "true" if self.use_ssl_var.get() else "false"
+            
+            ps_content = f'''param(
+        [string]$BackupSuccess
+    )
+
+    # メール設定
+    $SmtpServer = "{smtp_server}"
+    $SmtpPort = {smtp_port}
+    $SenderEmail = "{sender_email}"
+    $SenderPassword = "{sender_password}"
+    $RecipientEmail = "{recipient_email}"
+    $UseSSL = ${use_ssl}
+
+    try {{
+        # 件名と本文を設定
+        if ($BackupSuccess -eq "1") {{
+            $Subject = "Robocopyバックアップ結果 - 成功"
+            $Result = "成功"
+        }} else {{
+            $Subject = "Robocopyバックアップ結果 - 失敗"
+            $Result = "失敗"
+        }}
+        
+        $Body = @"
+    Robocopyバックアップの実行結果をお知らせします。
+
+    実行日時: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")
+    結果: $Result
+    コピー元: {self.source_var.get()}
+    コピー先: {self.dest_var.get()}
+
+    詳細なログは以下のファイルをご確認ください：
+    {os.path.abspath(self.log_file_var.get()) if self.log_file_var.get() else os.path.abspath("robocopy_schedule_log.txt")}
+    "@
+
+        # メール送信設定
+        $SecurePassword = ConvertTo-SecureString $SenderPassword -AsPlainText -Force
+        $Credential = New-Object System.Management.Automation.PSCredential($SenderEmail, $SecurePassword)
+        
+        # メール送信パラメータ
+        $MailParams = @{{
+            SmtpServer = $SmtpServer
+            Port = $SmtpPort
+            From = $SenderEmail
+            To = $RecipientEmail
+            Subject = $Subject
+            Body = $Body
+            Credential = $Credential
+            UseSsl = $UseSSL
+            Encoding = [System.Text.Encoding]::UTF8
+        }}
+        
+        # メール送信
+        Send-MailMessage @MailParams
+        Write-Output "メール送信成功"
+        exit 0
+        
+    }} catch {{
+        Write-Error "メール送信エラー: $($_.Exception.Message)"
+        exit 1
+    }}'''
+            
+            # PowerShellスクリプトファイルを作成
+            with open(ps_path, 'w', encoding='utf-8') as f:
+                f.write(ps_content)
+            
+            self.log_message(f"PowerShellスクリプトを生成しました: {ps_path}")
+            return ps_path
+            
+        except Exception as e:
+            error_msg = f"PowerShellスクリプト生成エラー: {str(e)}"
+            self.log_message(error_msg, "error")
+            raise
 
 def main():
-    # コマンドライン引数をチェック
-    if len(sys.argv) > 1 and sys.argv[1] == '--scheduled':
-        # スケジュール実行
-        scheduled_execution()
-    else:
-        # GUI実行
-        root = tk.Tk()
-        app = RobocopyScheduler(root)
-        root.mainloop()
+    # GUIモードでのみ実行（--scheduledオプションは不要になった）
+    root = tk.Tk()
+    app = RobocopyScheduler(root)
+    root.mainloop()
 
 if __name__ == "__main__":
     main()
