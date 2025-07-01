@@ -531,15 +531,26 @@ class RobocopyScheduler:
         # 制御ボタンセクション
         button_frame = ttk.Frame(main_frame)
         button_frame.grid(row=3, column=0, columnspan=2, pady=20)
-        
-        ttk.Button(button_frame, text="設定を保存", 
+
+        # 上段ボタン
+        top_button_frame = ttk.Frame(button_frame)
+        top_button_frame.grid(row=0, column=0, columnspan=4, pady=(0, 5))
+
+        ttk.Button(top_button_frame, text="設定を保存", 
                   command=self.save_config).grid(row=0, column=0, padx=5)
-        ttk.Button(button_frame, text="今すぐ実行", 
+        ttk.Button(top_button_frame, text="今すぐ実行", 
                   command=self.run_now).grid(row=0, column=1, padx=5)
-        ttk.Button(button_frame, text="タスク作成/更新", 
-                  command=self.create_scheduled_task).grid(row=0, column=2, padx=5)
-        ttk.Button(button_frame, text="タスク削除", 
-                  command=self.delete_scheduled_task).grid(row=0, column=3, padx=5)
+        ttk.Button(top_button_frame, text="バッチテスト", 
+                  command=self.test_batch_script).grid(row=0, column=2, padx=5)
+
+        # 下段ボタン
+        bottom_button_frame = ttk.Frame(button_frame)
+        bottom_button_frame.grid(row=1, column=0, columnspan=4, pady=(5, 0))
+
+        ttk.Button(bottom_button_frame, text="タスク作成/更新", 
+                  command=self.create_scheduled_task).grid(row=0, column=0, padx=5)
+        ttk.Button(bottom_button_frame, text="タスク削除", 
+                  command=self.delete_scheduled_task).grid(row=0, column=1, padx=5)
         
         # タスクステータス表示
         status_frame = ttk.LabelFrame(main_frame, text="タスクステータス", padding="10")
@@ -802,7 +813,7 @@ class RobocopyScheduler:
         self.root.update()
     
     def build_robocopy_options(self):
-        """選択されたオプションからRobocopyのオプション文字列を構築"""
+        """選択されたオプションからRobocopyのオプション文字列を構築（ログファイル競合対策版）"""
         options = []
         
         # コピーモードを追加（ラジオボタンから取得）
@@ -834,7 +845,26 @@ class RobocopyScheduler:
         if wait_time:
             options.append(f"/W:{wait_time}")
         
-        # ログファイル設定
+        # ログファイル設定は削除（バッチファイル内でリダイレクトするため）
+        # 以前の /LOG+: オプションは使用しない
+        
+        # カスタムオプションを追加
+        custom_options = self.custom_options_var.get().strip()
+        if custom_options:
+            options.append(custom_options)
+        
+        return " ".join(options)
+    
+    def build_robocopy_options_for_gui(self):
+        """GUI実行用のRobocopyオプション（ログファイル付き）"""
+        options = []
+        
+        # 基本オプションを取得
+        base_options = self.build_robocopy_options()
+        if base_options:
+            options.append(base_options)
+        
+        # GUI実行時のみログファイル設定を追加
         if self.option_vars["enable_log"].get():
             log_file = self.log_file_var.get()
             if log_file:
@@ -844,18 +874,173 @@ class RobocopyScheduler:
                 else:
                     options.append(f"/LOG+:{log_file}")
         
-        # カスタムオプションを追加
-        custom_options = self.custom_options_var.get().strip()
-        if custom_options:
-            options.append(custom_options)
-        
         return " ".join(options)
     
+    def escape_batch_password(self, password):
+        """バッチファイル用にパスワードの特殊文字をエスケープ"""
+        if not password:
+            return ""
+        
+        # バッチファイルで特別な意味を持つ文字をエスケープ
+        escaped = password
+        
+        # ^文字は最初にエスケープ（他のエスケープ文字に影響しないように）
+        escaped = escaped.replace('^', '^^')
+        
+        # %文字をエスケープ（変数展開を防ぐ）
+        escaped = escaped.replace('%', '%%')
+        
+        # &文字をエスケープ（コマンド区切りを防ぐ）
+        escaped = escaped.replace('&', '^&')
+        
+        # <、>文字をエスケープ（リダイレクトを防ぐ）
+        escaped = escaped.replace('<', '^<')
+        escaped = escaped.replace('>', '^>')
+        
+        # |文字をエスケープ（パイプを防ぐ）
+        escaped = escaped.replace('|', '^|')
+        
+        # "文字をエスケープ
+        escaped = escaped.replace('"', '""')
+        
+        # スペースが含まれている場合は全体をダブルクォートで囲む
+        if ' ' in escaped:
+            escaped = f'"{escaped}"'
+        
+        return escaped
+
+    def escape_batch_string(self, text):
+        """バッチファイル用に文字列の特殊文字をエスケープ（パスワード以外用）"""
+        if not text:
+            return ""
+        
+        escaped = text
+        
+        # ^文字は最初にエスケープ
+        escaped = escaped.replace('^', '^^')
+        
+        # %文字をエスケープ
+        escaped = escaped.replace('%', '%%')
+        
+        # &文字をエスケープ
+        escaped = escaped.replace('&', '^&')
+        
+        # <、>文字をエスケープ
+        escaped = escaped.replace('<', '^<')
+        escaped = escaped.replace('>', '^>')
+        
+        # |文字をエスケープ
+        escaped = escaped.replace('|', '^|')
+        
+        return escaped
+
+    def escape_powershell_string(self, text):
+        """PowerShell用に文字列をエスケープ"""
+        if not text:
+            return ""
+        
+        # PowerShellで特別な意味を持つ文字をエスケープ
+        escaped = text
+        
+        # バックスラッシュを最初にエスケープ
+        escaped = escaped.replace('\\', '\\\\')
+        
+        # ダブルクォートをエスケープ
+        escaped = escaped.replace('"', '`"')
+        
+        # シングルクォートをエスケープ
+        escaped = escaped.replace("'", "''")
+        
+        # バッククォートをエスケープ
+        escaped = escaped.replace('`', '``')
+        
+        # ドル記号をエスケープ（変数展開を防ぐ）
+        escaped = escaped.replace('$', '`$')
+        
+        return escaped
+
+    def test_batch_script(self):
+        """生成されるバッチファイルをテスト実行"""
+        if not self.source_var.get() or not self.dest_var.get():
+            messagebox.showerror("エラー", "コピー元とコピー先を設定してください")
+            return
+        
+        task_name = self.task_name_var.get().strip()
+        if not task_name:
+            messagebox.showerror("エラー", "タスク名を入力してください")
+            return
+        
+        try:
+            # 確認ダイアログ
+            response = messagebox.askyesno("確認", 
+                "バッチスクリプトのテスト実行を行います。\n"
+                "この操作では実際にrobocopyが実行されます。\n\n"
+                "続行しますか？")
+            
+            if not response:
+                return
+            
+            self.log_message("バッチスクリプトのテスト実行を開始します...")
+            self.status_var.set("テスト実行中...")
+            
+            # 一時的なバッチファイルを生成
+            test_batch_name = f"{task_name}_test"
+            test_batch_path = self.generate_batch_script(test_batch_name)
+            
+            self.log_message(f"テスト用バッチファイルを生成: {test_batch_path}")
+            
+            # バッチファイルを実行
+            self.log_message("バッチファイルを実行中...")
+            
+            # バッチファイルを新しいコマンドプロンプトで実行（出力を確認できるように）
+            cmd = f'start "Robocopy Test" /wait cmd /c ""{test_batch_path}" & echo. & echo 実行完了。何かキーを押すと閉じます。 & pause"'
+            
+            result = subprocess.run(cmd, shell=True, capture_output=False)
+            
+            self.log_message("バッチファイルのテスト実行が完了しました")
+            self.log_message("詳細な結果はコマンドプロンプトウィンドウとログファイルを確認してください")
+            
+            # テスト用ファイルを削除するか確認
+            cleanup_response = messagebox.askyesno("テストファイル削除", 
+                f"テスト用に生成されたファイルを削除しますか？\n\n"
+                f"・{os.path.basename(test_batch_path)}\n"
+                f"{'・' + os.path.basename(self.generate_powershell_mail_script()) if self.email_enabled_var.get() else ''}")
+            
+            if cleanup_response:
+                try:
+                    # バッチファイルを削除
+                    if os.path.exists(test_batch_path):
+                        os.remove(test_batch_path)
+                        self.log_message(f"テスト用バッチファイルを削除: {test_batch_path}")
+                    
+                    # PowerShellスクリプトを削除（メール送信が有効な場合）
+                    if self.email_enabled_var.get():
+                        ps_file = f"{test_batch_name}_mail.ps1"
+                        if os.path.exists(ps_file):
+                            os.remove(ps_file)
+                            self.log_message(f"テスト用PowerShellスクリプトを削除: {ps_file}")
+                            
+                except Exception as e:
+                    self.log_message(f"テストファイル削除エラー: {str(e)}", "error")
+            
+            self.status_var.set("テスト実行完了")
+            
+            messagebox.showinfo("テスト完了", 
+                "バッチスクリプトのテスト実行が完了しました。\n"
+                "実行結果を確認して、問題がなければタスクスケジューラに登録してください。")
+            
+        except Exception as e:
+            error_msg = f"バッチテストエラー: {str(e)}"
+            self.log_message(error_msg, "error")
+            messagebox.showerror("エラー", error_msg)
+            self.status_var.set("テスト実行エラー")
+    
     def run_robocopy(self):
-        """Robocopyを実行"""
+        """Robocopyを実行（GUI用）"""
         source = self.source_var.get()
         dest = self.dest_var.get()
-        options = self.build_robocopy_options()
+        # GUI実行時は専用のオプション関数を使用
+        options = self.build_robocopy_options_for_gui()
         
         if not source or not dest:
             self.log_message("エラー: コピー元またはコピー先が指定されていません", "error")
@@ -1307,7 +1492,7 @@ Robocopyバックアップの実行結果をお知らせします。
             self.log_message(f"設定読み込みエラー: {str(e)}" , "error")
 
     def generate_batch_script(self, task_name):
-        """タスクスケジューラ用のバッチファイルを生成"""
+        """タスクスケジューラ用のバッチファイルを生成（SJIS対応）"""
         try:
             batch_filename = f"{task_name}.bat"
             batch_path = os.path.abspath(batch_filename)
@@ -1315,11 +1500,11 @@ Robocopyバックアップの実行結果をお知らせします。
             # バッチファイルの内容を構築
             batch_content = self.build_batch_content()
             
-            # バッチファイルを作成
+            # バッチファイルをSJIS(CP932)で作成
             with open(batch_path, 'w', encoding='cp932') as f:
                 f.write(batch_content)
             
-            self.log_message(f"バッチファイルを生成しました: {batch_path}")
+            self.log_message(f"バッチファイルを生成しました (SJIS): {batch_path}")
             return batch_path
             
         except Exception as e:
@@ -1328,16 +1513,20 @@ Robocopyバックアップの実行結果をお知らせします。
             raise
 
     def build_batch_content(self):
-        """バッチファイルの内容を構築"""
+        """バッチファイルの内容を構築（ファイルアクセス競合対策版）"""
         source = self.source_var.get()
         dest = self.dest_var.get()
-        options = self.build_robocopy_options()
+        options = self.build_robocopy_options()  # ログオプションなしのバージョンを使用
         
         # ログファイルのパス（絶対パスに変換）
         log_file = os.path.abspath(self.log_file_var.get()) if self.log_file_var.get() else os.path.abspath("robocopy_schedule_log.txt")
         
+        # 一時ログファイルのパス
+        temp_log = os.path.join(os.path.dirname(log_file), "robocopy_temp.log")
+        
         batch_lines = [
             "@echo off",
+            "chcp 932 >nul",  # SJIS(CP932)に設定してログファイルの文字化けを防ぐ
             "setlocal enabledelayedexpansion",
             "",
             ":: ===========================================",
@@ -1347,20 +1536,22 @@ Robocopyバックアップの実行結果をお知らせします。
             "",
             "set ERROR_OCCURRED=0",
             "set LOG_FILE=\"" + log_file + "\"",
+            f"set TEMP_LOG=\"{temp_log}\"",
             "",
             ":: ログファイルにヘッダーを出力",
             f"echo [%date% %time%] バックアップ開始 >> %LOG_FILE%",
             f"echo コピー元: {source} >> %LOG_FILE%",
             f"echo コピー先: {dest} >> %LOG_FILE%",
+            "echo. >> %LOG_FILE%",
             "",
         ]
         
         # ネットワーク認証（コピー元）
         if self.is_network_path(source) and self.source_username_var.get():
             server_path = "\\\\" + source.split("\\")[2]
-            username = self.source_username_var.get()
-            password = self.source_password_var.get()
-            domain = self.source_domain_var.get()
+            username = self.escape_batch_string(self.source_username_var.get())
+            password = self.escape_batch_password(self.source_password_var.get())
+            domain = self.escape_batch_string(self.source_domain_var.get())
             
             if domain:
                 user_part = f"{domain}\\{username}"
@@ -1370,10 +1561,17 @@ Robocopyバックアップの実行結果をお知らせします。
             batch_lines.extend([
                 ":: コピー元ネットワーク認証",
                 f"echo [%date% %time%] コピー元ネットワーク認証中... >> %LOG_FILE%",
+                f"echo コピー元サーバー: {server_path} >> %LOG_FILE%",
+                f"echo ユーザー: {user_part} >> %LOG_FILE%",
+                "",
+                ":: 既存の接続を切断",
                 f"net use \"{server_path}\" /delete /y >nul 2>&1",
-                f"net use \"{server_path}\" /user:\"{user_part}\" \"{password}\"",
-                "if %errorlevel% neq 0 (",
-                "    echo [%date% %time%] ERROR: コピー元ネットワーク認証に失敗 >> %LOG_FILE%",
+                "",
+                ":: 新しい接続を確立",
+                f"net use \"{server_path}\" {password} /user:\"{user_part}\" /persistent:no",
+                "if !errorlevel! neq 0 (",
+                "    echo [%date% %time%] ERROR: コピー元ネットワーク認証に失敗 ^(エラーコード: !errorlevel!^) >> %LOG_FILE%",
+                "    echo 詳細: net use コマンドが失敗しました >> %LOG_FILE%",
                 "    set ERROR_OCCURRED=1",
                 "    goto :CLEANUP",
                 ")",
@@ -1384,42 +1582,104 @@ Robocopyバックアップの実行結果をお知らせします。
         # ネットワーク認証（コピー先）
         if self.is_network_path(dest) and self.dest_username_var.get():
             server_path = "\\\\" + dest.split("\\")[2]
-            username = self.dest_username_var.get()
-            password = self.dest_password_var.get()
-            domain = self.dest_domain_var.get()
+            username = self.escape_batch_string(self.dest_username_var.get())
+            password = self.escape_batch_password(self.dest_password_var.get())
+            domain = self.escape_batch_string(self.dest_domain_var.get())
             
             if domain:
                 user_part = f"{domain}\\{username}"
             else:
                 user_part = username
                 
-            batch_lines.extend([
-                ":: コピー先ネットワーク認証",
-                f"echo [%date% %time%] コピー先ネットワーク認証中... >> %LOG_FILE%",
-                f"net use \"{server_path}\" /delete /y >nul 2>&1",
-                f"net use \"{server_path}\" /user:\"{user_part}\" \"{password}\"",
-                "if %errorlevel% neq 0 (",
-                "    echo [%date% %time%] ERROR: コピー先ネットワーク認証に失敗 >> %LOG_FILE%",
-                "    set ERROR_OCCURRED=1",
-                "    goto :CLEANUP",
-                ")",
-                f"echo [%date% %time%] コピー先ネットワーク認証成功 >> %LOG_FILE%",
-                "",
-            ])
+            # コピー元と同じサーバーかチェック
+            source_server = ""
+            if self.is_network_path(source):
+                source_server = "\\\\" + source.split("\\")[2]
+            
+            if server_path != source_server:  # 異なるサーバーの場合のみ認証
+                batch_lines.extend([
+                    ":: コピー先ネットワーク認証",
+                    f"echo [%date% %time%] コピー先ネットワーク認証中... >> %LOG_FILE%",
+                    f"echo コピー先サーバー: {server_path} >> %LOG_FILE%",
+                    f"echo ユーザー: {user_part} >> %LOG_FILE%",
+                    "",
+                    ":: 既存の接続を切断",
+                    f"net use \"{server_path}\" /delete /y >nul 2>&1",
+                    "",
+                    ":: 新しい接続を確立",
+                    f"net use \"{server_path}\" {password} /user:\"{user_part}\" /persistent:no",
+                    "if !errorlevel! neq 0 (",
+                    "    echo [%date% %time%] ERROR: コピー先ネットワーク認証に失敗 ^(エラーコード: !errorlevel!^) >> %LOG_FILE%",
+                    "    echo 詳細: net use コマンドが失敗しました >> %LOG_FILE%",
+                    "    set ERROR_OCCURRED=1",
+                    "    goto :CLEANUP",
+                    ")",
+                    f"echo [%date% %time%] コピー先ネットワーク認証成功 >> %LOG_FILE%",
+                    "",
+                ])
+            else:
+                batch_lines.extend([
+                    f"echo [%date% %time%] コピー先は同じサーバーのため認証をスキップ >> %LOG_FILE%",
+                    "",
+                ])
         
-        # Robocopyコマンド実行
+        # 接続確認
+        batch_lines.extend([
+            ":: フォルダアクセス確認",
+            f"echo [%date% %time%] フォルダアクセス確認中... >> %LOG_FILE%",
+            "",
+            ":: コピー元フォルダの確認",
+            f"if not exist \"{source}\" (",
+            f"    echo [%date% %time%] ERROR: コピー元フォルダにアクセスできません: {source} >> %LOG_FILE%",
+            "    set ERROR_OCCURRED=1",
+            "    goto :CLEANUP",
+            ")",
+            f"echo [%date% %time%] コピー元フォルダアクセス確認OK >> %LOG_FILE%",
+            "",
+            ":: コピー先フォルダの確認（存在しない場合は作成を試行）",
+            f"if not exist \"{dest}\" (",
+            f"    echo [%date% %time%] コピー先フォルダが存在しないため作成を試行: {dest} >> %LOG_FILE%",
+            f"    mkdir \"{dest}\" 2>>%LOG_FILE%",
+            "    if !errorlevel! neq 0 (",
+            f"        echo [%date% %time%] ERROR: コピー先フォルダを作成できません: {dest} >> %LOG_FILE%",
+            "        set ERROR_OCCURRED=1",
+            "        goto :CLEANUP",
+            "    )",
+            ")",
+            f"echo [%date% %time%] コピー先フォルダアクセス確認OK >> %LOG_FILE%",
+            "",
+        ])
+        
+        # Robocopyコマンド実行（修正版 - ファイルアクセス競合回避）
         batch_lines.extend([
             ":: Robocopy実行",
             f"echo [%date% %time%] Robocopy実行開始 >> %LOG_FILE%",
-            f"robocopy \"{source}\" \"{dest}\" {options} >> %LOG_FILE% 2>&1",
-            "set ROBOCOPY_EXIT_CODE=%errorlevel%",
+            f"echo コマンド: robocopy \"{source}\" \"{dest}\" {options} >> %LOG_FILE%",
+            "echo ---------------------------------------- >> %LOG_FILE%",
+            "",
+            ":: 既存の一時ログファイルを削除",
+            "if exist %TEMP_LOG% del %TEMP_LOG%",
+            "",
+            ":: robocopyを実行（一時ログファイルに出力）",
+            f"robocopy \"{source}\" \"{dest}\" {options} > %TEMP_LOG% 2>&1",
+            "set ROBOCOPY_EXIT_CODE=!errorlevel!",
+            "",
+            ":: robocopyの出力をメインログファイルに統合",
+            "if exist %TEMP_LOG% (",
+            "    type %TEMP_LOG% >> %LOG_FILE%",
+            "    del %TEMP_LOG%",
+            ") else (",
+            "    echo robocopyの出力ファイルが見つかりません >> %LOG_FILE%",
+            ")",
+            "",
+            "echo ---------------------------------------- >> %LOG_FILE%",
             "",
             ":: Robocopy結果判定（0-7は正常、8以上はエラー）",
-            "if %ROBOCOPY_EXIT_CODE% LSS 8 (",
-            "    echo [%date% %time%] Robocopy実行成功 ^(戻り値: %ROBOCOPY_EXIT_CODE%^) >> %LOG_FILE%",
+            "if !ROBOCOPY_EXIT_CODE! LSS 8 (",
+            "    echo [%date% %time%] Robocopy実行成功 ^(戻り値: !ROBOCOPY_EXIT_CODE!^) >> %LOG_FILE%",
             "    set BACKUP_SUCCESS=1",
             ") else (",
-            "    echo [%date% %time%] Robocopy実行失敗 ^(戻り値: %ROBOCOPY_EXIT_CODE%^) >> %LOG_FILE%",
+            "    echo [%date% %time%] Robocopy実行失敗 ^(戻り値: !ROBOCOPY_EXIT_CODE!^) >> %LOG_FILE%",
             "    set BACKUP_SUCCESS=0",
             "    set ERROR_OCCURRED=1",
             ")",
@@ -1432,8 +1692,8 @@ Robocopyバックアップの実行結果をお知らせします。
             batch_lines.extend([
                 ":: メール送信",
                 f"echo [%date% %time%] メール送信中... >> %LOG_FILE%",
-                f"powershell -ExecutionPolicy Bypass -File \"{powershell_script}\" %BACKUP_SUCCESS% >> %LOG_FILE% 2>&1",
-                "if %errorlevel% neq 0 (",
+                f"powershell -ExecutionPolicy Bypass -File \"{powershell_script}\" !BACKUP_SUCCESS! >> %LOG_FILE% 2>&1",
+                "if !errorlevel! neq 0 (",
                 "    echo [%date% %time%] WARNING: メール送信に失敗 >> %LOG_FILE%",
                 ") else (",
                 "    echo [%date% %time%] メール送信完了 >> %LOG_FILE%",
@@ -1444,6 +1704,15 @@ Robocopyバックアップの実行結果をお知らせします。
         # クリーンアップ
         cleanup_lines = [
             ":CLEANUP",
+            ":: クリーンアップ開始",
+            f"echo [%date% %time%] クリーンアップ開始 >> %LOG_FILE%",
+            "",
+            ":: 一時ファイルの削除",
+            "if exist %TEMP_LOG% (",
+            "    del %TEMP_LOG%",
+            f"    echo [%date% %time%] 一時ログファイルを削除 >> %LOG_FILE%",
+            ")",
+            "",
             ":: ネットワーク接続切断",
         ]
         
@@ -1452,7 +1721,7 @@ Robocopyバックアップの実行結果をお知らせします。
             server_path = "\\\\" + source.split("\\")[2]
             cleanup_lines.extend([
                 f"net use \"{server_path}\" /delete /y >nul 2>&1",
-                f"echo [%date% %time%] コピー元ネットワーク接続切断 >> %LOG_FILE%",
+                f"echo [%date% %time%] コピー元ネットワーク接続切断: {server_path} >> %LOG_FILE%",
             ])
         
         # コピー先のネットワーク切断
@@ -1463,7 +1732,7 @@ Robocopyバックアップの実行結果をお知らせします。
             if server_path != source_server:
                 cleanup_lines.extend([
                     f"net use \"{server_path}\" /delete /y >nul 2>&1",
-                    f"echo [%date% %time%] コピー先ネットワーク接続切断 >> %LOG_FILE%",
+                    f"echo [%date% %time%] コピー先ネットワーク接続切断: {server_path} >> %LOG_FILE%",
                 ])
         
         cleanup_lines.extend([
@@ -1471,9 +1740,15 @@ Robocopyバックアップの実行結果をお知らせします。
             ":: 結果出力",
             "if %ERROR_OCCURRED% equ 0 (",
             "    echo [%date% %time%] バックアップ完了 >> %LOG_FILE%",
+            "    echo.", 
+            "    echo バックアップが正常に完了しました。",
             ") else (",
             "    echo [%date% %time%] バックアップ中にエラーが発生しました >> %LOG_FILE%",
+            "    echo.",
+            "    echo バックアップ中にエラーが発生しました。",
+            "    echo ログファイルを確認してください: %LOG_FILE%",
             ")",
+            "echo. >> %LOG_FILE%",
             "",
             "exit /b %ERROR_OCCURRED%"
         ])
@@ -1483,84 +1758,135 @@ Robocopyバックアップの実行結果をお知らせします。
         return "\n".join(batch_lines)
 
     def generate_powershell_mail_script(self):
-        """メール送信用のPowerShellスクリプトを生成"""
+        """メール送信用のPowerShellスクリプトを生成（SJIS対応版）"""
         try:
             ps_filename = f"{self.task_name_var.get()}_mail.ps1"
             ps_path = os.path.abspath(ps_filename)
             
-            smtp_server = self.smtp_server_var.get()
+            smtp_server = self.escape_powershell_string(self.smtp_server_var.get())
             smtp_port = self.smtp_port_var.get()
-            sender_email = self.sender_email_var.get()
-            sender_password = self.sender_password_var.get()
-            recipient_email = self.recipient_email_var.get()
-            use_ssl = "true" if self.use_ssl_var.get() else "false"
+            sender_email = self.escape_powershell_string(self.sender_email_var.get())
+            sender_password = self.escape_powershell_string(self.sender_password_var.get())
+            recipient_email = self.escape_powershell_string(self.recipient_email_var.get())
+            use_ssl = "$true" if self.use_ssl_var.get() else "$false"
             
-            ps_content = f'''param(
-        [string]$BackupSuccess
-    )
+            # パスをエスケープ
+            source_path = self.escape_powershell_string(self.source_var.get())
+            dest_path = self.escape_powershell_string(self.dest_var.get())
+            log_file_path = self.escape_powershell_string(os.path.abspath(self.log_file_var.get()) if self.log_file_var.get() else os.path.abspath("robocopy_schedule_log.txt"))
+            
+            ps_content = f'''# PowerShell メール送信スクリプト
+# 文字エンコーディングをShift_JISに設定
+[Console]::OutputEncoding = [System.Text.Encoding]::GetEncoding("Shift_JIS")
 
-    # メール設定
-    $SmtpServer = "{smtp_server}"
-    $SmtpPort = {smtp_port}
-    $SenderEmail = "{sender_email}"
-    $SenderPassword = "{sender_password}"
-    $RecipientEmail = "{recipient_email}"
-    $UseSSL = ${use_ssl}
+param(
+    [string]$BackupSuccess = "0"
+)
 
-    try {{
-        # 件名と本文を設定
-        if ($BackupSuccess -eq "1") {{
-            $Subject = "Robocopyバックアップ結果 - 成功"
-            $Result = "成功"
-        }} else {{
-            $Subject = "Robocopyバックアップ結果 - 失敗"
-            $Result = "失敗"
+# メール設定
+$SmtpServer = "{smtp_server}"
+$SmtpPort = {smtp_port}
+$SenderEmail = "{sender_email}"
+$SenderPassword = "{sender_password}"
+$RecipientEmail = "{recipient_email}"
+$UseSSL = {use_ssl}
+
+try {{
+    Write-Output "[$(Get-Date -Format 'yyyy/MM/dd HH:mm:ss')] メール送信開始"
+    
+    # 件名と本文を設定
+    if ($BackupSuccess -eq "1") {{
+        $Subject = "Robocopyバックアップ結果 - 成功"
+        $Result = "成功"
+    }} else {{
+        $Subject = "Robocopyバックアップ結果 - 失敗"
+        $Result = "失敗"
+    }}
+    
+    # ログファイルの最後の数行を取得（存在する場合）
+    $LogDetails = ""
+    $LogFile = "{log_file_path}"
+    if (Test-Path $LogFile) {{
+        try {{
+            # ログファイルをShift_JISで読み込み
+            $Encoding = [System.Text.Encoding]::GetEncoding("Shift_JIS")
+            $LogLines = Get-Content $LogFile -Tail 20 -Encoding Default
+            $LogDetails = "`n`n=== 直近のログ（最新20行） ===`n" + ($LogLines -join "`n")
+        }} catch {{
+            $LogDetails = "`n`nログファイルの読み取りに失敗しました。"
         }}
-        
-        $Body = @"
-    Robocopyバックアップの実行結果をお知らせします。
+    }} else {{
+        $LogDetails = "`n`nログファイルが見つかりません。"
+    }}
+    
+    $Body = @"
+Robocopyバックアップの実行結果をお知らせします。
 
-    実行日時: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")
-    結果: $Result
-    コピー元: {self.source_var.get()}
-    コピー先: {self.dest_var.get()}
+実行日時: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")
+結果: $Result
+コピー元: {source_path}
+コピー先: {dest_path}
 
-    詳細なログは以下のファイルをご確認ください：
-    {os.path.abspath(self.log_file_var.get()) if self.log_file_var.get() else os.path.abspath("robocopy_schedule_log.txt")}
-    "@
+詳細ログファイル: $LogFile$LogDetails
+"@
 
-        # メール送信設定
-        $SecurePassword = ConvertTo-SecureString $SenderPassword -AsPlainText -Force
-        $Credential = New-Object System.Management.Automation.PSCredential($SenderEmail, $SecurePassword)
-        
-        # メール送信パラメータ
-        $MailParams = @{{
-            SmtpServer = $SmtpServer
-            Port = $SmtpPort
-            From = $SenderEmail
-            To = $RecipientEmail
-            Subject = $Subject
-            Body = $Body
-            Credential = $Credential
-            UseSsl = $UseSSL
-            Encoding = [System.Text.Encoding]::UTF8
-        }}
-        
-        # メール送信
-        Send-MailMessage @MailParams
-        Write-Output "メール送信成功"
-        exit 0
-        
-    }} catch {{
-        Write-Error "メール送信エラー: $($_.Exception.Message)"
+    # セキュアな認証情報を作成
+    if ([string]::IsNullOrEmpty($SenderPassword)) {{
+        Write-Error "送信者パスワードが設定されていません"
         exit 1
-    }}'''
+    }}
+    
+    $SecurePassword = ConvertTo-SecureString $SenderPassword -AsPlainText -Force
+    $Credential = New-Object System.Management.Automation.PSCredential($SenderEmail, $SecurePassword)
+    
+    # メール送信パラメータ
+    $MailParams = @{{
+        SmtpServer = $SmtpServer
+        Port = $SmtpPort
+        From = $SenderEmail
+        To = $RecipientEmail
+        Subject = $Subject
+        Body = $Body
+        Credential = $Credential
+        UseSsl = $UseSSL
+        Encoding = [System.Text.Encoding]::UTF8
+    }}
+    
+    Write-Output "SMTP設定: $SmtpServer`:$SmtpPort (SSL: $UseSSL)"
+    Write-Output "送信者: $SenderEmail"
+    Write-Output "受信者: $RecipientEmail"
+    
+    # メール送信
+    Send-MailMessage @MailParams
+    Write-Output "[$(Get-Date -Format 'yyyy/MM/dd HH:mm:ss')] メール送信成功"
+    exit 0
+    
+}} catch {{
+    $ErrorMessage = $_.Exception.Message
+    Write-Error "[$(Get-Date -Format 'yyyy/MM/dd HH:mm:ss')] メール送信エラー: $ErrorMessage"
+    
+    # 詳細なエラー情報
+    if ($_.Exception.InnerException) {{
+        Write-Error "内部エラー: $($_.Exception.InnerException.Message)"
+    }}
+    
+    # SMTP接続の問題の場合の追加情報
+    if ($ErrorMessage -match "SMTP|SSL|TLS|認証") {{
+        Write-Output "SMTP設定を確認してください："
+        Write-Output "- サーバー: $SmtpServer"
+        Write-Output "- ポート: $SmtpPort"
+        Write-Output "- SSL使用: $UseSSL"
+        Write-Output "- 認証情報: 送信者メール、パスワード"
+    }}
+    
+    exit 1
+}}'''
             
-            # PowerShellスクリプトファイルを作成
-            with open(ps_path, 'w', encoding='utf-8') as f:
+            # PowerShellスクリプトファイルをShift_JISで作成
+            with open(ps_path, 'w', encoding='cp932') as f:
                 f.write(ps_content)
             
-            self.log_message(f"PowerShellスクリプトを生成しました: {ps_path}")
+            self.log_message(f"PowerShellスクリプトを生成しました (SJIS): {ps_path}")
             return ps_path
             
         except Exception as e:
