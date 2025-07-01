@@ -178,3 +178,4 @@ cython_debug/
 robocopy_config.json
 *.log
 *.bat
+*.ps1
