@@ -10,6 +10,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import glob
 from datetime import timedelta
+import tempfile
 
 class RobocopyScheduler:
     def __init__(self, root):
@@ -486,43 +487,62 @@ class RobocopyScheduler:
         # メール設定セクション
         email_frame = ttk.LabelFrame(main_frame, text="メール通知設定", padding="10")
         email_frame.grid(row=2, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
-        
+
         # メール送信有効化チェックボックス
         self.email_enabled_var = tk.BooleanVar()
         email_check = ttk.Checkbutton(email_frame, text="実行結果をメールで送信", 
-                                     variable=self.email_enabled_var,
-                                     command=self.toggle_email_settings)
+                                    variable=self.email_enabled_var,
+                                    command=self.toggle_email_settings)
         email_check.grid(row=0, column=0, columnspan=2, sticky=tk.W)
-        
+
         # SMTPサーバー設定
         self.email_settings_frame = ttk.Frame(email_frame)
         self.email_settings_frame.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E))
-        
+
         ttk.Label(self.email_settings_frame, text="SMTPサーバー:").grid(row=0, column=0, sticky=tk.W)
         self.smtp_server_var = tk.StringVar(value="smtp.gmail.com")
         ttk.Entry(self.email_settings_frame, textvariable=self.smtp_server_var, width=30).grid(row=0, column=1, padx=5)
-        
+
         ttk.Label(self.email_settings_frame, text="ポート:").grid(row=0, column=2, sticky=tk.W)
         self.smtp_port_var = tk.StringVar(value="587")
         ttk.Entry(self.email_settings_frame, textvariable=self.smtp_port_var, width=10).grid(row=0, column=3, padx=5)
 
         self.use_ssl_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(self.email_settings_frame, text="SSLを使用", variable=self.use_ssl_var).grid(row=0, column=4, padx=5)
-        
+
         ttk.Label(self.email_settings_frame, text="送信者メール:").grid(row=1, column=0, sticky=tk.W)
         self.sender_email_var = tk.StringVar()
         ttk.Entry(self.email_settings_frame, textvariable=self.sender_email_var, width=40).grid(row=1, column=1, columnspan=2, padx=5)
-        
+
         ttk.Label(self.email_settings_frame, text="送信者パスワード:").grid(row=2, column=0, sticky=tk.W)
         self.sender_password_var = tk.StringVar()
         ttk.Entry(self.email_settings_frame, textvariable=self.sender_password_var, 
-                 width=40, show="*").grid(row=2, column=1, columnspan=2, padx=5)
-        
+                width=40, show="*").grid(row=2, column=1, columnspan=2, padx=5)
+
         ttk.Label(self.email_settings_frame, text="送信先メール:").grid(row=3, column=0, sticky=tk.W)
         self.recipient_email_var = tk.StringVar()
         ttk.Entry(self.email_settings_frame, textvariable=self.recipient_email_var, 
-                 width=40).grid(row=3, column=1, columnspan=2, padx=5)
-        
+                width=40).grid(row=3, column=1, columnspan=2, padx=5)
+
+        # SMTP接続テストボタンを追加
+        smtp_test_frame = ttk.Frame(self.email_settings_frame)
+        smtp_test_frame.grid(row=4, column=0, columnspan=5, pady=10)
+
+        ttk.Button(smtp_test_frame, text="SMTP接続テスト", 
+                command=self.test_smtp_connection).grid(row=0, column=0, padx=5)
+        ttk.Button(smtp_test_frame, text="テストメール送信", 
+                command=self.send_test_email).grid(row=0, column=1, padx=5)
+        ttk.Button(smtp_test_frame, text="設定自動診断", 
+                command=self.send_test_email_with_multiple_configs).grid(row=0, column=2, padx=5)
+        ttk.Button(smtp_test_frame, text="認証方式診断", 
+                command=self.send_test_email_with_auth_methods).grid(row=0, column=3, padx=5)
+        ttk.Button(smtp_test_frame, text="軽量認証診断", 
+          command=self.quick_auth_test_v3).grid(row=0, column=4, padx=5)
+        ttk.Button(smtp_test_frame, text="設定確認", 
+          command=self.debug_smtp_settings).grid(row=0, column=5, padx=5)
+        ttk.Button(smtp_test_frame, text="CRAM-MD5送信", 
+          command=self.send_email_with_cram_md5).grid(row=0, column=5, padx=5)
+
         # 初期状態ではメール設定を無効化
         self.toggle_email_settings()
         
@@ -791,11 +811,22 @@ class RobocopyScheduler:
         if self.email_enabled_var.get():
             # メール設定を有効化
             for widget in self.email_settings_frame.winfo_children():
-                widget.configure(state='normal')
+                if isinstance(widget, ttk.Frame):
+                    # フレーム内のウィジェットも有効化
+                    for child in widget.winfo_children():
+                        if hasattr(child, 'configure'):
+                            child.configure(state='normal')
+                elif hasattr(widget, 'configure'):
+                    widget.configure(state='normal')
         else:
             # メール設定を無効化
             for widget in self.email_settings_frame.winfo_children():
-                if isinstance(widget, ttk.Entry):
+                if isinstance(widget, ttk.Frame):
+                    # フレーム内のウィジェットも無効化
+                    for child in widget.winfo_children():
+                        if hasattr(child, 'configure') and not isinstance(child, ttk.Label):
+                            child.configure(state='disabled')
+                elif hasattr(widget, 'configure') and not isinstance(widget, ttk.Label):
                     widget.configure(state='disabled')
     
     def log_message(self, message, tag=None):
@@ -1775,185 +1806,1465 @@ class RobocopyScheduler:
         batch_lines.extend(cleanup_lines)
         
         return "\n".join(batch_lines)
-
-    def generate_powershell_mail_script(self):
-        """メール送信用のPowerShellスクリプトを生成（動的ログファイル対応版）"""
+    
+    def test_smtp_connection(self):
+        """SMTP接続をテスト"""
+        smtp_server = self.smtp_server_var.get().strip()
+        smtp_port = self.smtp_port_var.get().strip()
+        
+        if not smtp_server:
+            messagebox.showerror("エラー", "SMTPサーバーを入力してください")
+            return
+        
+        if not smtp_port:
+            messagebox.showerror("エラー", "ポート番号を入力してください")
+            return
+        
         try:
-            ps_filename = f"{self.task_name_var.get()}_mail.ps1"
-            ps_path = os.path.abspath(ps_filename)
+            port_num = int(smtp_port)
+            if port_num < 1 or port_num > 65535:
+                raise ValueError()
+        except ValueError:
+            messagebox.showerror("エラー", "有効なポート番号を入力してください（1-65535）")
+            return
+        
+        try:
+            self.log_message(f"SMTP接続テスト開始: {smtp_server}:{smtp_port}")
             
-            smtp_server = self.escape_powershell_string(self.smtp_server_var.get())
-            smtp_port = self.smtp_port_var.get()
-            sender_email = self.escape_powershell_string(self.sender_email_var.get())
-            sender_password = self.escape_powershell_string(self.sender_password_var.get())
-            recipient_email = self.escape_powershell_string(self.recipient_email_var.get())
-            use_ssl = "$true" if self.use_ssl_var.get() else "$false"
+            # UseSSLの値を文字列として取得
+            use_ssl_value = "true" if self.use_ssl_var.get() else "false"
             
-            # パスをエスケープ
+            # PowerShellスクリプトでSMTP接続をテスト
+            ps_script_content = f'''
+    param(
+        [string]$SmtpServer = "{self.escape_powershell_string(smtp_server)}",
+        [int]$SmtpPort = {smtp_port},
+        [string]$UseSSLStr = "{use_ssl_value}"
+    )
+
+    # 文字列をブール型に変換
+    $UseSSL = [System.Convert]::ToBoolean($UseSSLStr)
+
+    try {{
+        Write-Output "SMTP接続テスト開始: $SmtpServer`:$SmtpPort (SSL: $UseSSL)"
+        
+        # TCP接続テスト
+        Write-Output "TCP接続確認中..."
+        $tcpTest = Test-NetConnection -ComputerName $SmtpServer -Port $SmtpPort -WarningAction SilentlyContinue
+        
+        if ($tcpTest.TcpTestSucceeded) {{
+            Write-Output "TCP接続成功"
+            
+            # SMTP接続テスト（System.Net.Sockets.TcpClientを使用）
+            Write-Output "SMTP接続確認中..."
+            
+            try {{
+                $tcpClient = New-Object System.Net.Sockets.TcpClient
+                $tcpClient.ReceiveTimeout = 10000
+                $tcpClient.SendTimeout = 10000
+                
+                $tcpClient.Connect($SmtpServer, $SmtpPort)
+                
+                if ($tcpClient.Connected) {{
+                    $stream = $tcpClient.GetStream()
+                    
+                    # SSL/TLS対応
+                    if ($UseSSL) {{
+                        Write-Output "SSL/TLS暗号化を開始中..."
+                        $sslStream = New-Object System.Net.Security.SslStream($stream)
+                        $sslStream.AuthenticateAsClient($SmtpServer)
+                        $reader = New-Object System.IO.StreamReader($sslStream)
+                        $writer = New-Object System.IO.StreamWriter($sslStream)
+                    }} else {{
+                        $reader = New-Object System.IO.StreamReader($stream)
+                        $writer = New-Object System.IO.StreamWriter($stream)
+                    }}
+                    
+                    # SMTPサーバーからの初期レスポンスを読み取り
+                    $response = $reader.ReadLine()
+                    Write-Output "SMTPサーバー応答: $response"
+                    
+                    # QUITコマンドで接続を閉じる
+                    $writer.WriteLine("QUIT")
+                    $writer.Flush()
+                    
+                    # 適切にストリームを閉じる
+                    if ($UseSSL -and $sslStream) {{
+                        $sslStream.Close()
+                    }}
+                    $stream.Close()
+                    $tcpClient.Close()
+                    
+                    if ($response -match "^220") {{
+                        Write-Output "SMTP接続成功 - サーバーが正常に応答しています"
+                        exit 0
+                    }} else {{
+                        Write-Output "警告: SMTPサーバーの応答が異常です ($response)"
+                        exit 1
+                    }}
+                }} else {{
+                    Write-Output "エラー: SMTP接続に失敗しました"
+                    exit 1
+                }}
+            }} catch {{
+                Write-Output "エラー: SMTP接続テストに失敗しました - $($_.Exception.Message)"
+                exit 1
+            }}
+        }} else {{
+            Write-Output "エラー: TCP接続に失敗しました"
+            Write-Output "確認事項:"
+            Write-Output "- SMTPサーバー名が正しいか"
+            Write-Output "- ポート番号が正しいか"
+            Write-Output "- ファイアウォールでブロックされていないか"
+            Write-Output "- インターネット接続が正常か"
+            exit 1
+        }}
+    }} catch {{
+        Write-Output "エラー: 接続テストでエラーが発生しました - $($_.Exception.Message)"
+        exit 1
+    }}
+    '''
+            
+            # 一時的なPowerShellスクリプトファイルを作成
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.ps1', delete=False, encoding='cp932') as temp_file:
+                temp_file.write(ps_script_content)
+                temp_ps_path = temp_file.name
+            
+            try:
+                # PowerShellスクリプトを実行
+                cmd = f'powershell -ExecutionPolicy Bypass -File "{temp_ps_path}"'
+                result = subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding='cp932')
+                
+                # 結果をログに出力
+                if result.stdout:
+                    for line in result.stdout.strip().split('\n'):
+                        if line.strip():
+                            self.log_message(f"  {line.strip()}")
+                
+                if result.stderr:
+                    for line in result.stderr.strip().split('\n'):
+                        if line.strip():
+                            self.log_message(f"  ERROR: {line.strip()}", "error")
+                
+                if result.returncode == 0:
+                    self.log_message("SMTP接続テスト成功", "success")
+                    messagebox.showinfo("接続テスト成功", 
+                        f"SMTPサーバーへの接続に成功しました。\n\n"
+                        f"サーバー: {smtp_server}\n"
+                        f"ポート: {smtp_port}\n"
+                        f"SSL: {'有効' if self.use_ssl_var.get() else '無効'}")
+                else:
+                    self.log_message("SMTP接続テスト失敗", "error")
+                    messagebox.showerror("接続テスト失敗", 
+                        f"SMTPサーバーへの接続に失敗しました。\n\n"
+                        f"詳細はログを確認してください。")
+            
+            finally:
+                # 一時ファイルを削除
+                try:
+                    os.unlink(temp_ps_path)
+                except:
+                    pass
+                    
+        except Exception as e:
+            error_msg = f"SMTP接続テストエラー: {str(e)}"
+            self.log_message(error_msg, "error")
+            messagebox.showerror("エラー", error_msg)
+
+    def send_test_email(self):
+        """テストメールを送信（デバッグ強化版）"""
+        # 入力値の検証
+        required_fields = [
+            (self.smtp_server_var.get().strip(), "SMTPサーバー"),
+            (self.smtp_port_var.get().strip(), "ポート番号"),
+            (self.sender_email_var.get().strip(), "送信者メール"),
+            (self.sender_password_var.get().strip(), "送信者パスワード"),
+            (self.recipient_email_var.get().strip(), "送信先メール")
+        ]
+        
+        for value, field_name in required_fields:
+            if not value:
+                messagebox.showerror("エラー", f"{field_name}を入力してください")
+                return
+        
+        # ポート番号の検証
+        try:
+            port_num = int(self.smtp_port_var.get().strip())
+            if port_num < 1 or port_num > 65535:
+                raise ValueError()
+        except ValueError:
+            messagebox.showerror("エラー", "有効なポート番号を入力してください（1-65535）")
+            return
+        
+        # 確認ダイアログ
+        response = messagebox.askyesno("確認", 
+            f"テストメールを送信します。\n\n"
+            f"送信先: {self.recipient_email_var.get()}\n"
+            f"SMTPサーバー: {self.smtp_server_var.get()}:{self.smtp_port_var.get()}\n\n"
+            f"続行しますか？")
+        
+        if not response:
+            return
+        
+        try:
+            self.log_message("テストメール送信開始...")
+            
+            # デバッグ情報をログに出力
+            self.log_message(f"設定確認:")
+            self.log_message(f"  SMTPサーバー: {self.smtp_server_var.get()}")
+            self.log_message(f"  ポート: {self.smtp_port_var.get()}")
+            self.log_message(f"  SSL: {self.use_ssl_var.get()}")
+            self.log_message(f"  送信者: {self.sender_email_var.get()}")
+            self.log_message(f"  受信者: {self.recipient_email_var.get()}")
+            
+            # エスケープ処理
+            smtp_server = self.escape_powershell_string(self.smtp_server_var.get().strip())
+            smtp_port = self.smtp_port_var.get().strip()
+            sender_email = self.escape_powershell_string(self.sender_email_var.get().strip())
+            sender_password = self.escape_powershell_string(self.sender_password_var.get().strip())
+            recipient_email = self.escape_powershell_string(self.recipient_email_var.get().strip())
+            use_ssl_str = "$true" if self.use_ssl_var.get() else "$false"
+            
+            # デバッグ強化版PowerShellスクリプト
+            ps_script_content = f"""# デバッグ強化版テストメール送信スクリプト
+    $ErrorActionPreference = "Continue"  # エラーでも続行してログを確認
+    $ProgressPreference = "SilentlyContinue"  # プログレスバーを非表示
+
+    $SmtpServer = "{smtp_server}"
+    $SmtpPort = {smtp_port}
+    $SenderEmail = "{sender_email}"
+    $SenderPassword = "{sender_password}"
+    $RecipientEmail = "{recipient_email}"
+    $UseSSL = {use_ssl_str}
+
+    Write-Output "=== デバッグ開始 ==="
+    Write-Output "PowerShell Version: $($PSVersionTable.PSVersion)"
+    Write-Output "実行時刻: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+    Write-Output "設定値確認:"
+    Write-Output "  SMTP Server: $SmtpServer"
+    Write-Output "  Port: $SmtpPort"
+    Write-Output "  SSL: $UseSSL"
+    Write-Output "  Sender: $SenderEmail"
+    Write-Output "  Recipient: $RecipientEmail"
+    Write-Output "  Password Length: $($SenderPassword.Length)"
+
+    try {{
+        Write-Output "--- STEP 1: 認証情報作成 ---"
+        Write-Output "SecureString作成開始..."
+        $SecurePassword = ConvertTo-SecureString $SenderPassword -AsPlainText -Force
+        Write-Output "SecureString作成完了"
+        
+        Write-Output "PSCredential作成開始..."
+        $Credential = New-Object System.Management.Automation.PSCredential($SenderEmail, $SecurePassword)
+        Write-Output "PSCredential作成完了"
+        
+        Write-Output "--- STEP 2: SMTPクライアント作成 ---"
+        Write-Output "SMTPクライアント初期化中..."
+        $SmtpClient = New-Object System.Net.Mail.SmtpClient($SmtpServer, $SmtpPort)
+        Write-Output "基本設定適用中..."
+        $SmtpClient.EnableSsl = $UseSSL
+        $SmtpClient.Credentials = $Credential
+        $SmtpClient.Timeout = 30000  # 30秒に短縮
+        $SmtpClient.DeliveryMethod = [System.Net.Mail.SmtpDeliveryMethod]::Network
+        Write-Output "SMTPクライアント設定完了"
+        
+        Write-Output "--- STEP 3: メールメッセージ作成 ---"
+        Write-Output "MailMessage作成中..."
+        $MailMessage = New-Object System.Net.Mail.MailMessage
+        $MailMessage.From = $SenderEmail
+        $MailMessage.To.Add($RecipientEmail)
+        $MailMessage.Subject = "RCScheduler テストメール - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+        $MailMessage.Body = "これはRCSchedulerからのテストメールです。`n送信日時: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+        $MailMessage.BodyEncoding = [System.Text.Encoding]::UTF8
+        $MailMessage.IsBodyHtml = $false
+        Write-Output "メールメッセージ作成完了"
+        
+        Write-Output "--- STEP 4: SMTP接続テスト ---"
+        Write-Output "SMTP接続確認中..."
+        
+        # 接続テスト（Send前に）
+        try {{
+            Write-Output "SMTPサーバーへの接続テスト実行..."
+            $TestClient = New-Object System.Net.Sockets.TcpClient
+            $TestClient.Connect($SmtpServer, $SmtpPort)
+            if ($TestClient.Connected) {{
+                Write-Output "TCP接続成功"
+                $TestClient.Close()
+            }} else {{
+                Write-Output "TCP接続失敗"
+            }}
+        }} catch {{
+            Write-Output "TCP接続テストエラー: $($_.Exception.Message)"
+        }}
+        
+        Write-Output "--- STEP 5: メール送信実行 ---"
+        Write-Output "Send()メソッド実行開始..."
+        $StartTime = Get-Date
+        
+        $SmtpClient.Send($MailMessage)
+        
+        $EndTime = Get-Date
+        $Duration = ($EndTime - $StartTime).TotalSeconds
+        Write-Output "Send()メソッド実行完了 (所要時間: ${{Duration}}秒)"
+        Write-Output "=== メール送信成功 ==="
+        exit 0
+        
+    }} catch [System.Net.Mail.SmtpException] {{
+        Write-Output "--- SMTP例外発生 ---"
+        Write-Output "SMTP例外: $($_.Exception.Message)"
+        if ($_.Exception.StatusCode) {{
+            Write-Output "SMTPステータス: $($_.Exception.StatusCode)"
+        }}
+        Write-Output "Inner Exception: $($_.Exception.InnerException.Message)"
+        exit 1
+        
+    }} catch [System.TimeoutException] {{
+        Write-Output "--- タイムアウト例外発生 ---"
+        Write-Output "タイムアウト: $($_.Exception.Message)"
+        exit 1
+        
+    }} catch [System.Net.Sockets.SocketException] {{
+        Write-Output "--- ソケット例外発生 ---"
+        Write-Output "ソケットエラー: $($_.Exception.Message)"
+        Write-Output "ErrorCode: $($_.Exception.ErrorCode)"
+        exit 1
+        
+    }} catch {{
+        Write-Output "--- 一般例外発生 ---"
+        Write-Output "例外タイプ: $($_.Exception.GetType().FullName)"
+        Write-Output "例外メッセージ: $($_.Exception.Message)"
+        if ($_.Exception.InnerException) {{
+            Write-Output "内部例外: $($_.Exception.InnerException.Message)"
+        }}
+        exit 1
+        
+    }} finally {{
+        Write-Output "--- クリーンアップ開始 ---"
+        if ($MailMessage) {{
+            $MailMessage.Dispose()
+            Write-Output "MailMessage解放完了"
+        }}
+        if ($SmtpClient) {{
+            $SmtpClient.Dispose()
+            Write-Output "SmtpClient解放完了"
+        }}
+        Write-Output "=== デバッグ終了 ==="
+    }}"""
+            
+            # 一時的なPowerShellスクリプトファイルを作成
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.ps1', delete=False, encoding='cp932') as temp_file:
+                temp_file.write(ps_script_content)
+                temp_ps_path = temp_file.name
+            
+            self.log_message(f"PowerShellスクリプト作成: {temp_ps_path}")
+            
+            try:
+                # PowerShellスクリプトを実行（タイムアウトを120秒に延長）
+                cmd = f'powershell -ExecutionPolicy Bypass -File "{temp_ps_path}"'
+                self.log_message("PowerShell実行開始...")
+                
+                result = subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding='cp932', timeout=120)
+                
+                self.log_message("PowerShell実行完了")
+                
+                # 結果をログに出力
+                if result.stdout:
+                    for line in result.stdout.strip().split('\n'):
+                        if line.strip():
+                            self.log_message(f"  {line.strip()}")
+                
+                if result.stderr:
+                    for line in result.stderr.strip().split('\n'):
+                        if line.strip():
+                            self.log_message(f"  ERROR: {line.strip()}", "error")
+                
+                if result.returncode == 0:
+                    self.log_message("テストメール送信成功", "success")
+                    messagebox.showinfo("送信成功", 
+                        f"テストメールの送信に成功しました。\n\n"
+                        f"送信先メールボックスを確認してください。")
+                else:
+                    self.log_message("テストメール送信失敗", "error")
+                    messagebox.showerror("送信失敗", 
+                        f"テストメールの送信に失敗しました。\n\n"
+                        f"詳細はログを確認してください。")
+            
+            finally:
+                # 一時ファイルを削除
+                try:
+                    os.unlink(temp_ps_path)
+                    self.log_message("一時ファイル削除完了")
+                except Exception as cleanup_error:
+                    self.log_message(f"一時ファイル削除エラー: {cleanup_error}", "error")
+            
+        except subprocess.TimeoutExpired:
+            error_msg = "テストメール送信がタイムアウトしました（120秒）"
+            self.log_message(error_msg, "error")
+            messagebox.showerror("タイムアウト", 
+                f"{error_msg}\n\n"
+                f"SMTPサーバーの応答が遅いか、認証に問題がある可能性があります。\n"
+                f"ログで詳細を確認してください。")
+        except Exception as e:
+            error_msg = f"テストメール送信エラー: {str(e)}"
+            self.log_message(error_msg, "error")
+            messagebox.showerror("エラー", error_msg)
+
+    def send_email_with_cram_md5(self):
+        """CRAM-MD5認証でメール送信"""
+        # 入力値の検証
+        required_fields = [
+            (self.smtp_server_var.get().strip(), "SMTPサーバー"),
+            (self.smtp_port_var.get().strip(), "ポート番号"),
+            (self.sender_email_var.get().strip(), "送信者メール"),
+            (self.sender_password_var.get().strip(), "送信者パスワード"),
+            (self.recipient_email_var.get().strip(), "送信先メール")
+        ]
+        
+        for value, field_name in required_fields:
+            if not value:
+                messagebox.showerror("エラー", f"{field_name}を入力してください")
+                return
+        
+        try:
+            port_num = int(self.smtp_port_var.get().strip())
+            if port_num < 1 or port_num > 65535:
+                raise ValueError()
+        except ValueError:
+            messagebox.showerror("エラー", "有効なポート番号を入力してください（1-65535）")
+            return
+        
+        # 確認ダイアログ
+        response = messagebox.askyesno("確認", 
+            f"CRAM-MD5認証でメールを送信します。\n\n"
+            f"送信先: {self.recipient_email_var.get()}\n"
+            f"SMTPサーバー: {self.smtp_server_var.get()}:{self.smtp_port_var.get()}\n\n"
+            f"続行しますか？")
+        
+        if not response:
+            return
+        
+        try:
+            self.log_message("CRAM-MD5メール送信開始...")
+            
+            # PowerShell用の値を準備
+            smtp_server = self.escape_powershell_string(self.smtp_server_var.get().strip())
+            smtp_port = self.smtp_port_var.get().strip()
+            sender_email = self.escape_powershell_string(self.sender_email_var.get().strip())
+            sender_password = self.escape_powershell_string(self.sender_password_var.get().strip())
+            recipient_email = self.escape_powershell_string(self.recipient_email_var.get().strip())
+            use_ssl_ps = "$true" if self.use_ssl_var.get() else "$false"
+            
+            # コピー元・コピー先パス（メール本文用）
             source_path = self.escape_powershell_string(self.source_var.get())
             dest_path = self.escape_powershell_string(self.dest_var.get())
             
-            # ベースログファイルのパスを取得
-            base_log_file = self.log_file_var.get() if self.log_file_var.get() else "robocopy_schedule_log"
-            if base_log_file.endswith('.txt'):
-                base_log_file = base_log_file[:-4]
-            base_log_dir = os.path.dirname(os.path.abspath(base_log_file))
-            base_log_name = os.path.basename(base_log_file)
-            
-            ps_content = f'''# PowerShell メール送信スクリプト（動的ログファイル対応）
-# 文字エンコーディングをShift_JISに設定
-[Console]::OutputEncoding = [System.Text.Encoding]::GetEncoding("Shift_JIS")
+            # CRAM-MD5メール送信PowerShellスクリプト
+            ps_script_content = f'''# CRAM-MD5認証メール送信スクリプト
+    $ErrorActionPreference = "Stop"
 
-param(
-    [string]$BackupSuccess = "0",
-    [string]$LogFilePath = ""
-)
+    # 設定
+    $SmtpServer = "{smtp_server}"
+    $SmtpPort = {smtp_port}
+    $SenderEmail = "{sender_email}"
+    $SenderPassword = "{sender_password}"
+    $RecipientEmail = "{recipient_email}"
+    $UseSSL = {use_ssl_ps}
 
-# メール設定
-$SmtpServer = "{smtp_server}"
-$SmtpPort = {smtp_port}
-$SenderEmail = "{sender_email}"
-$SenderPassword = "{sender_password}"
-$RecipientEmail = "{recipient_email}"
-$UseSSL = {use_ssl}
-
-try {{
-    Write-Output "[$(Get-Date -Format 'yyyy/MM/dd HH:mm:ss')] メール送信開始"
-    
-    # 件名と本文を設定
-    if ($BackupSuccess -eq "1") {{
-        $Subject = "Robocopyバックアップ結果 - 成功"
-        $Result = "成功"
-    }} else {{
-        $Subject = "Robocopyバックアップ結果 - 失敗"
-        $Result = "失敗"
-    }}
-    
-    # ログファイルの処理
-    $LogDetails = ""
-    $LogFile = ""
-    
-    if ($LogFilePath -and (Test-Path $LogFilePath)) {{
-        # バッチファイルから渡されたログファイルを使用
-        $LogFile = $LogFilePath
-        Write-Output "指定されたログファイルを使用: $LogFile"
-    }} else {{
-        # 最新のログファイルを検索
-        $LogDir = "{base_log_dir}"
-        $LogPattern = "{base_log_name}_*.txt"
-        
-        Write-Output "ログファイルを検索中: $LogDir\\$LogPattern"
-        
-        $LatestLog = Get-ChildItem -Path $LogDir -Filter $LogPattern -ErrorAction SilentlyContinue | 
-                     Sort-Object LastWriteTime -Descending | 
-                     Select-Object -First 1
-        
-        if ($LatestLog) {{
-            $LogFile = $LatestLog.FullName
-            Write-Output "最新のログファイルを発見: $LogFile"
-        }} else {{
-            Write-Output "ログファイルが見つかりません"
-        }}
-    }}
-    
-    # ログファイルの内容を読み取り
-    if ($LogFile -and (Test-Path $LogFile)) {{
-        try {{
-            # ログファイル全体をShift_JISで読み込み（最大1000行）
-            $AllLines = Get-Content $LogFile -Encoding Default -ErrorAction SilentlyContinue
-            
-            if ($AllLines) {{
-                # ファイルサイズが大きい場合は最後の50行のみ
-                if ($AllLines.Count -gt 50) {{
-                    $LogLines = $AllLines | Select-Object -Last 50
-                    $LogDetails = "`n`n=== ログファイル内容（最新50行） ===`n" + ($LogLines -join "`n")
-                }} else {{
-                    $LogDetails = "`n`n=== ログファイル内容（全体） ===`n" + ($AllLines -join "`n")
-                }}
-            }} else {{
-                $LogDetails = "`n`nログファイルは空です。"
-            }}
-        }} catch {{
-            $LogDetails = "`n`nログファイルの読み取りに失敗しました: $($_.Exception.Message)"
-        }}
-    }} else {{
-        $LogDetails = "`n`nログファイルが見つからないか、アクセスできません。"
-    }}
-    
-    # メール本文を作成
-    $Body = @"
-Robocopyバックアップの実行結果をお知らせします。
-
-実行日時: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")
-結果: $Result
-コピー元: {source_path}
-コピー先: {dest_path}
-ログファイル: $LogFile$LogDetails
-"@
-
-    # セキュアな認証情報を作成
-    if ([string]::IsNullOrEmpty($SenderPassword)) {{
-        Write-Error "送信者パスワードが設定されていません"
-        exit 1
-    }}
-    
-    $SecurePassword = ConvertTo-SecureString $SenderPassword -AsPlainText -Force
-    $Credential = New-Object System.Management.Automation.PSCredential($SenderEmail, $SecurePassword)
-    
-    # メール送信パラメータ
-    $MailParams = @{{
-        SmtpServer = $SmtpServer
-        Port = $SmtpPort
-        From = $SenderEmail
-        To = $RecipientEmail
-        Subject = $Subject
-        Body = $Body
-        Credential = $Credential
-        UseSsl = $UseSSL
-        Encoding = [System.Text.Encoding]::UTF8
-    }}
-    
-    Write-Output "SMTP設定: $SmtpServer`:$SmtpPort (SSL: $UseSSL)"
+    Write-Output "=== CRAM-MD5メール送信開始 ==="
+    Write-Output "サーバー: $SmtpServer`:$SmtpPort (SSL: $UseSSL)"
     Write-Output "送信者: $SenderEmail"
     Write-Output "受信者: $RecipientEmail"
-    
-    # メール送信
-    Send-MailMessage @MailParams
-    Write-Output "[$(Get-Date -Format 'yyyy/MM/dd HH:mm:ss')] メール送信成功"
-    exit 0
-    
-}} catch {{
-    $ErrorMessage = $_.Exception.Message
-    Write-Error "[$(Get-Date -Format 'yyyy/MM/dd HH:mm:ss')] メール送信エラー: $ErrorMessage"
-    
-    # 詳細なエラー情報
-    if ($_.Exception.InnerException) {{
-        Write-Error "内部エラー: $($_.Exception.InnerException.Message)"
+
+    # Base64エンコード関数
+    function ConvertTo-Base64($text) {{
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes($text)
+        return [System.Convert]::ToBase64String($bytes)
     }}
+
+    try {{
+        # TCP接続
+        Write-Output "TCP接続中..."
+        $tcpClient = New-Object System.Net.Sockets.TcpClient
+        $tcpClient.ReceiveTimeout = 30000  # 30秒
+        $tcpClient.SendTimeout = 30000
+        $tcpClient.Connect($SmtpServer, $SmtpPort)
+        Write-Output "TCP接続成功"
+        
+        $stream = $tcpClient.GetStream()
+        
+        # SSL認証
+        if ($UseSSL) {{
+            Write-Output "SSL認証中..."
+            $sslStream = New-Object System.Net.Security.SslStream($stream)
+            $sslStream.ReadTimeout = 30000
+            $sslStream.WriteTimeout = 30000
+            $sslStream.AuthenticateAsClient($SmtpServer)
+            $stream = $sslStream
+            Write-Output "SSL認証完了"
+            Start-Sleep -Milliseconds 500
+        }}
+        
+        $reader = New-Object System.IO.StreamReader($stream)
+        $writer = New-Object System.IO.StreamWriter($stream)
+        
+        # 初期応答
+        $response = $reader.ReadLine()
+        Write-Output "初期応答: $response"
+        if (-not $response.StartsWith("220")) {{
+            throw "SMTP初期応答エラー: $response"
+        }}
+        
+        # EHLO送信
+        Write-Output "EHLO送信中..."
+        $writer.WriteLine("EHLO localhost")
+        $writer.Flush()
+        
+        # EHLO応答読み取り
+        do {{
+            $response = $reader.ReadLine()
+            Write-Output "EHLO応答: $response"
+        }} while ($response.StartsWith("250-"))
+        
+        # CRAM-MD5認証開始
+        Write-Output "--- CRAM-MD5認証開始 ---"
+        $writer.WriteLine("AUTH CRAM-MD5")
+        $writer.Flush()
+        
+        $response = $reader.ReadLine()
+        Write-Output "認証チャレンジ: $response"
+        
+        if ($response.StartsWith("334")) {{
+            # チャレンジデコード
+            $challenge = $response.Substring(4)
+            $challengeBytes = [System.Convert]::FromBase64String($challenge)
+            $challengeText = [System.Text.Encoding]::UTF8.GetString($challengeBytes)
+            Write-Output "デコードチャレンジ: $challengeText"
+            
+            # HMAC-MD5計算
+            $hmac = New-Object System.Security.Cryptography.HMACMD5
+            $hmac.Key = [System.Text.Encoding]::UTF8.GetBytes($SenderPassword)
+            $hash = $hmac.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($challengeText))
+            $hashHex = [System.BitConverter]::ToString($hash) -replace "-", ""
+            
+            # CRAM-MD5レスポンス作成
+            $cramResponse = "$SenderEmail " + $hashHex.ToLower()
+            $encodedResponse = ConvertTo-Base64 $cramResponse
+            
+            Write-Output "認証レスポンス送信中..."
+            $writer.WriteLine($encodedResponse)
+            $writer.Flush()
+            
+            $response = $reader.ReadLine()
+            Write-Output "認証結果: $response"
+            
+            if ($response.StartsWith("235")) {{
+                Write-Output "CRAM-MD5認証成功！"
+            }} else {{
+                throw "CRAM-MD5認証失敗: $response"
+            }}
+        }} else {{
+            throw "CRAM-MD5チャレンジエラー: $response"
+        }}
+        
+        # メール送信開始
+        Write-Output "--- メール送信開始 ---"
+        
+        # MAIL FROM
+        $writer.WriteLine("MAIL FROM:<$SenderEmail>")
+        $writer.Flush()
+        $response = $reader.ReadLine()
+        Write-Output "MAIL FROM: $response"
+        if (-not $response.StartsWith("250")) {{
+            throw "MAIL FROMエラー: $response"
+        }}
+        
+        # RCPT TO
+        $writer.WriteLine("RCPT TO:<$RecipientEmail>")
+        $writer.Flush()
+        $response = $reader.ReadLine()
+        Write-Output "RCPT TO: $response"
+        if (-not $response.StartsWith("250")) {{
+            throw "RCPT TOエラー: $response"
+        }}
+        
+        # DATA開始
+        $writer.WriteLine("DATA")
+        $writer.Flush()
+        $response = $reader.ReadLine()
+        Write-Output "DATA: $response"
+        if (-not $response.StartsWith("354")) {{
+            throw "DATAエラー: $response"
+        }}
+        
+        # メールヘッダーと本文送信
+        Write-Output "メール内容送信中..."
+        $writer.WriteLine("From: $SenderEmail")
+        $writer.WriteLine("To: $RecipientEmail")
+        $writer.WriteLine("Subject: RCScheduler - CRAM-MD5メール送信テスト")
+        $writer.WriteLine("Date: $(Get-Date -Format 'r')")
+        $writer.WriteLine("Content-Type: text/plain; charset=utf-8")
+        $writer.WriteLine("Content-Transfer-Encoding: 8bit")
+        $writer.WriteLine("")
+        $writer.WriteLine("RCSchedulerからのCRAM-MD5認証メール送信テストです。")
+        $writer.WriteLine("")
+        $writer.WriteLine("送信日時: $(Get-Date)")
+        $writer.WriteLine("認証方式: CRAM-MD5 (暗号化されたパスワード認証)")
+        $writer.WriteLine("SMTPサーバー: $SmtpServer`:$SmtpPort")
+        $writer.WriteLine("SSL使用: $UseSSL")
+        $writer.WriteLine("")
+        $writer.WriteLine("バックアップ設定:")
+        $writer.WriteLine("コピー元: {source_path}")
+        $writer.WriteLine("コピー先: {dest_path}")
+        $writer.WriteLine("")
+        $writer.WriteLine("このメールが届いていれば、CRAM-MD5認証での")
+        $writer.WriteLine("メール送信機能が正常に動作しています。")
+        $writer.WriteLine("")
+        $writer.WriteLine("今後、このアプリケーションからの")
+        $writer.WriteLine("バックアップ結果通知メールが届きます。")
+        $writer.WriteLine(".")
+        $writer.Flush()
+        
+        # メール送信結果
+        $response = $reader.ReadLine()
+        Write-Output "メール送信結果: $response"
+        if ($response.StartsWith("250")) {{
+            Write-Output "メール送信成功！"
+        }} else {{
+            throw "メール送信エラー: $response"
+        }}
+        
+        # QUIT
+        $writer.WriteLine("QUIT")
+        $writer.Flush()
+        $response = $reader.ReadLine()
+        Write-Output "終了: $response"
+        
+        Write-Output "=== CRAM-MD5メール送信完了 ==="
+        exit 0
+        
+    }} catch {{
+        Write-Output "送信エラー: $($_.Exception.Message)"
+        if ($_.Exception.InnerException) {{
+            Write-Output "詳細: $($_.Exception.InnerException.Message)"
+        }}
+        exit 1
+    }} finally {{
+        try {{
+            if ($stream) {{ $stream.Close() }}
+            if ($tcpClient) {{ $tcpClient.Close() }}
+            Write-Output "接続クローズ完了"
+        }} catch {{
+            Write-Output "クローズエラー（無視）"
+        }}
+    }}'''
+            
+            # 一時的なPowerShellスクリプトファイルを作成
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.ps1', delete=False, encoding='cp932') as temp_file:
+                temp_file.write(ps_script_content)
+                temp_ps_path = temp_file.name
+            
+            try:
+                # PowerShellスクリプトを実行（60秒タイムアウト）
+                cmd = f'powershell -ExecutionPolicy Bypass -File "{temp_ps_path}"'
+                result = subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding='cp932', timeout=60)
+                
+                # 結果をログに出力
+                if result.stdout:
+                    for line in result.stdout.strip().split('\n'):
+                        if line.strip():
+                            self.log_message(f"  {line.strip()}")
+                
+                if result.stderr:
+                    for line in result.stderr.strip().split('\n'):
+                        if line.strip():
+                            self.log_message(f"  ERROR: {line.strip()}", "error")
+                
+                if result.returncode == 0:
+                    self.log_message("CRAM-MD5メール送信成功", "success")
+                    messagebox.showinfo("送信成功", 
+                        f"CRAM-MD5認証でメール送信に成功しました！\n\n"
+                        f"送信先メールボックスを確認してください。\n"
+                        f"今後、バックアップ結果通知もこの方式で送信されます。")
+                else:
+                    self.log_message("CRAM-MD5メール送信失敗", "error")
+                    messagebox.showerror("送信失敗", 
+                        f"CRAM-MD5メール送信に失敗しました。\n\n"
+                        f"詳細はログを確認してください。")
+            
+            finally:
+                try:
+                    os.unlink(temp_ps_path)
+                except:
+                    pass
+            
+        except subprocess.TimeoutExpired:
+            error_msg = "CRAM-MD5メール送信がタイムアウトしました（60秒）"
+            self.log_message(error_msg, "error")
+            messagebox.showerror("タイムアウト", error_msg)
+        except Exception as e:
+            error_msg = f"CRAM-MD5メール送信エラー: {str(e)}"
+            self.log_message(error_msg, "error")
+            messagebox.showerror("エラー", error_msg)
+
+    def debug_smtp_settings(self):
+        """SMTP設定のデバッグ表示"""
+        self.log_message("=== SMTP設定デバッグ ===")
+        self.log_message(f"SMTPサーバー: '{self.smtp_server_var.get()}'")
+        self.log_message(f"ポート: '{self.smtp_port_var.get()}'")
+        self.log_message(f"SSL使用: {self.use_ssl_var.get()} (型: {type(self.use_ssl_var.get())})")
+        self.log_message(f"送信者メール: '{self.sender_email_var.get()}'")
+        self.log_message(f"受信者メール: '{self.recipient_email_var.get()}'")
+        
+        # PowerShell用の値変換テスト
+        use_ssl_str = "$true" if self.use_ssl_var.get() else "$false"
+        self.log_message(f"PowerShell用SSL値: '{use_ssl_str}'")
+        
+        messagebox.showinfo("デバッグ完了", "設定値をログに出力しました。")
+
+    def quick_auth_test_v3(self):
+        """軽量版認証診断v3（SSLStream読み取り修正版）"""
+        # 入力値の検証（同じ）
+        required_fields = [
+            (self.smtp_server_var.get().strip(), "SMTPサーバー"),
+            (self.smtp_port_var.get().strip(), "ポート番号"),
+            (self.sender_email_var.get().strip(), "送信者メール"),
+            (self.sender_password_var.get().strip(), "送信者パスワード"),
+            (self.recipient_email_var.get().strip(), "送信先メール")
+        ]
+        
+        for value, field_name in required_fields:
+            if not value:
+                messagebox.showerror("エラー", f"{field_name}を入力してください")
+                return
+        
+        try:
+            port_num = int(self.smtp_port_var.get().strip())
+            if port_num < 1 or port_num > 65535:
+                raise ValueError()
+        except ValueError:
+            messagebox.showerror("エラー", "有効なポート番号を入力してください（1-65535）")
+            return
+        
+        response = messagebox.askyesno("確認", 
+            f"軽量版認証診断v3を実行します（15秒タイムアウト）。\n\n"
+            f"SMTPサーバー: {self.smtp_server_var.get()}:{self.smtp_port_var.get()}\n\n"
+            f"続行しますか？")
+        
+        if not response:
+            return
+        
+        try:
+            self.log_message("軽量版認証診断v3開始...")
+            
+            # PowerShell用の値を準備
+            smtp_server = self.escape_powershell_string(self.smtp_server_var.get().strip())
+            smtp_port = self.smtp_port_var.get().strip()
+            sender_email = self.escape_powershell_string(self.sender_email_var.get().strip())
+            sender_password = self.escape_powershell_string(self.sender_password_var.get().strip())
+            use_ssl_ps = "$true" if self.use_ssl_var.get() else "$false"
+            
+            # SSL読み取り修正版PowerShellスクリプト
+            ps_script_content = f'''# 軽量版認証診断v3（SSL読み取り修正版）
+    $ErrorActionPreference = "Continue"
+
+    $SmtpServer = "{smtp_server}"
+    $SmtpPort = {smtp_port}
+    $SenderEmail = "{sender_email}"
+    $SenderPassword = "{sender_password}"
+    $UseSSL = {use_ssl_ps}
+
+    Write-Output "=== 軽量版認証診断v3 ==="
+    Write-Output "サーバー: $SmtpServer`:$SmtpPort (SSL: $UseSSL)"
+
+    try {{
+        Write-Output "TCP接続開始..."
+        $tcpClient = New-Object System.Net.Sockets.TcpClient
+        $tcpClient.ReceiveTimeout = 10000  # 10秒タイムアウト
+        $tcpClient.SendTimeout = 10000
+        $tcpClient.Connect($SmtpServer, $SmtpPort)
+        Write-Output "TCP接続成功"
+        
+        $stream = $tcpClient.GetStream()
+        
+        # SSL処理
+        if ($UseSSL) {{
+            Write-Output "SSL認証開始..."
+            try {{
+                $sslStream = New-Object System.Net.Security.SslStream($stream)
+                $sslStream.ReadTimeout = 10000
+                $sslStream.WriteTimeout = 10000
+                $sslStream.AuthenticateAsClient($SmtpServer)
+                $stream = $sslStream
+                Write-Output "SSL認証完了"
+                
+                # SSL認証後の待機（重要）
+                Start-Sleep -Milliseconds 500
+                Write-Output "SSL後待機完了"
+            }} catch {{
+                Write-Output "SSL認証失敗: $($_.Exception.Message)"
+                throw
+            }}
+        }}
+        
+        $reader = New-Object System.IO.StreamReader($stream)
+        $writer = New-Object System.IO.StreamWriter($stream)
+        
+        # 初期応答読み取り（シンプル版）
+        Write-Output "SMTP初期応答読み取り中..."
+        try {{
+            $response = $reader.ReadLine()
+            Write-Output "初期応答: $response"
+            
+            if (-not $response.StartsWith("220")) {{
+                Write-Output "警告: 異常な初期応答"
+            }}
+        }} catch {{
+            Write-Output "初期応答読み取りエラー: $($_.Exception.Message)"
+            # 再試行
+            Start-Sleep -Milliseconds 1000
+            Write-Output "初期応答再試行..."
+            try {{
+                $response = $reader.ReadLine()
+                Write-Output "初期応答（再試行）: $response"
+            }} catch {{
+                Write-Output "初期応答再試行も失敗: $($_.Exception.Message)"
+                throw "SMTPサーバーから応答がありません"
+            }}
+        }}
+        
+        # EHLO送信
+        Write-Output "EHLO送信..."
+        $writer.WriteLine("EHLO localhost")
+        $writer.Flush()
+        
+        # EHLO応答読み取り（シンプル版）
+        $supportedAuth = @()
+        $responseCount = 0
+        
+        Write-Output "EHLO応答読み取り中..."
+        try {{
+            do {{
+                $response = $reader.ReadLine()
+                if ($response) {{
+                    Write-Output "EHLO応答: $response"
+                    
+                    # AUTH検出
+                    if ($response -match "250[- ]AUTH (.+)") {{
+                        $authMethods = $matches[1] -split " "
+                        $supportedAuth += $authMethods
+                        Write-Output "認証方式検出: $($authMethods -join ', ')"
+                    }}
+                    
+                    $responseCount++
+                    if ($responseCount -gt 20) {{ break }}
+                }} else {{
+                    Write-Output "EHLO応答終了"
+                    break
+                }}
+            }} while ($response.StartsWith("250-"))
+        }} catch {{
+            Write-Output "EHLO応答読み取りエラー: $($_.Exception.Message)"
+        }}
+        
+        $supportedAuth = $supportedAuth | Sort-Object -Unique
+        if ($supportedAuth.Count -gt 0) {{
+            Write-Output "=== 結果 ==="
+            Write-Output "サポート認証方式: $($supportedAuth -join ', ')"
+            
+            # 推奨認証方式を判定
+            if ($supportedAuth -contains "CRAM-MD5") {{
+                Write-Output "推奨: CRAM-MD5 (暗号化されたパスワード認証)"
+                Write-Output "この認証方式は.NET標準では対応していません"
+            }} elseif ($supportedAuth -contains "LOGIN") {{
+                Write-Output "推奨: LOGIN (Base64エンコード認証)"
+                Write-Output "この認証方式は一部対応可能です"
+            }} elseif ($supportedAuth -contains "PLAIN") {{
+                Write-Output "推奨: PLAIN (平文認証)"
+                Write-Output "この認証方式は.NET標準で対応しています"
+            }}
+        }} else {{
+            Write-Output "認証方式が検出されませんでした"
+            Write-Output "サーバーが認証を要求しない可能性があります"
+        }}
+        
+        # QUIT送信
+        try {{
+            $writer.WriteLine("QUIT")
+            $writer.Flush()
+            $response = $reader.ReadLine()
+            Write-Output "終了応答: $response"
+        }} catch {{
+            Write-Output "QUIT送信エラー（無視）"
+        }}
+        
+        Write-Output "=== 診断完了 ==="
+        exit 0
+        
+    }} catch {{
+        Write-Output "診断エラー: $($_.Exception.Message)"
+        if ($_.Exception.InnerException) {{
+            Write-Output "詳細: $($_.Exception.InnerException.Message)"
+        }}
+        exit 1
+    }} finally {{
+        try {{
+            if ($stream) {{ $stream.Close() }}
+            if ($tcpClient) {{ $tcpClient.Close() }}
+            Write-Output "接続クローズ完了"
+        }} catch {{
+            Write-Output "クローズエラー（無視）"
+        }}
+    }}'''
+            
+            # 一時的なPowerShellスクリプトファイルを作成
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.ps1', delete=False, encoding='cp932') as temp_file:
+                temp_file.write(ps_script_content)
+                temp_ps_path = temp_file.name
+            
+            try:
+                # PowerShellスクリプトを実行
+                cmd = f'powershell -ExecutionPolicy Bypass -File "{temp_ps_path}"'
+                result = subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding='cp932', timeout=15)
+                
+                # 結果をログに出力
+                if result.stdout:
+                    for line in result.stdout.strip().split('\n'):
+                        if line.strip():
+                            self.log_message(f"  {line.strip()}")
+                
+                if result.stderr:
+                    for line in result.stderr.strip().split('\n'):
+                        if line.strip():
+                            self.log_message(f"  ERROR: {line.strip()}", "error")
+                
+                if result.returncode == 0:
+                    self.log_message("軽量版認証診断v3成功", "success")
+                    messagebox.showinfo("診断成功", 
+                        f"認証方式の特定に成功しました。\n\n"
+                        f"ログで推奨認証方式を確認してください。")
+                else:
+                    self.log_message("軽量版認証診断v3失敗", "error")
+                    messagebox.showerror("診断失敗", 
+                        f"認証方式の特定に失敗しました。\n\n"
+                        f"詳細はログを確認してください。")
+            
+            finally:
+                try:
+                    os.unlink(temp_ps_path)
+                except:
+                    pass
+            
+        except subprocess.TimeoutExpired:
+            error_msg = "軽量版認証診断v3がタイムアウトしました（15秒）"
+            self.log_message(error_msg, "error")
+            messagebox.showerror("タイムアウト", error_msg)
+        except Exception as e:
+            error_msg = f"軽量版認証診断v3エラー: {str(e)}"
+            self.log_message(error_msg, "error")
+            messagebox.showerror("エラー", error_msg)
     
-    # SMTP接続の問題の場合の追加情報
-    if ($ErrorMessage -match "SMTP|SSL|TLS|認証") {{
-        Write-Output "SMTP設定を確認してください："
-        Write-Output "- サーバー: $SmtpServer"
-        Write-Output "- ポート: $SmtpPort"
-        Write-Output "- SSL使用: $UseSSL"
-        Write-Output "- 認証情報: 送信者メール、パスワード"
+    def send_test_email_with_auth_methods(self):
+        """複数の認証方式でテストメールを送信"""
+        # 入力値の検証
+        required_fields = [
+            (self.smtp_server_var.get().strip(), "SMTPサーバー"),
+            (self.smtp_port_var.get().strip(), "ポート番号"),
+            (self.sender_email_var.get().strip(), "送信者メール"),
+            (self.sender_password_var.get().strip(), "送信者パスワード"),
+            (self.recipient_email_var.get().strip(), "送信先メール")
+        ]
+        
+        for value, field_name in required_fields:
+            if not value:
+                messagebox.showerror("エラー", f"{field_name}を入力してください")
+                return
+        
+        # ポート番号の検証
+        try:
+            port_num = int(self.smtp_port_var.get().strip())
+            if port_num < 1 or port_num > 65535:
+                raise ValueError()
+        except ValueError:
+            messagebox.showerror("エラー", "有効なポート番号を入力してください（1-65535）")
+            return
+        
+        # 確認ダイアログ
+        response = messagebox.askyesno("確認", 
+            f"複数の認証方式でテストメールを送信します。\n\n"
+            f"送信先: {self.recipient_email_var.get()}\n"
+            f"SMTPサーバー: {self.smtp_server_var.get()}:{self.smtp_port_var.get()}\n\n"
+            f"続行しますか？")
+        
+        if not response:
+            return
+        
+        try:
+            self.log_message("複数認証方式でのテストメール送信開始...")
+            
+            # 基本情報
+            smtp_server = self.escape_powershell_string(self.smtp_server_var.get().strip())
+            smtp_port = self.smtp_port_var.get().strip()
+            sender_email = self.escape_powershell_string(self.sender_email_var.get().strip())
+            sender_password = self.escape_powershell_string(self.sender_password_var.get().strip())
+            recipient_email = self.escape_powershell_string(self.recipient_email_var.get().strip())
+            use_ssl = self.use_ssl_var.get()
+            
+            # PowerShellスクリプトを生成（Here-string使用回避版）
+            ps_script_content = f"""# 複数認証方式対応SMTP送信スクリプト
+    Add-Type -AssemblyName System.Net
+    Add-Type -AssemblyName System.Text.Encoding
+
+    $ErrorActionPreference = "Continue"
+
+    # 設定
+    $SmtpServer = "{smtp_server}"
+    $SmtpPort = {smtp_port}
+    $SenderEmail = "{sender_email}"
+    $SenderPassword = "{sender_password}"
+    $RecipientEmail = "{recipient_email}"
+    $UseSSL = ${{"$true" if use_ssl else "$false"}}
+
+    Write-Output "=== 認証方式診断開始 ==="
+    Write-Output "サーバー: $SmtpServer`:$SmtpPort"
+    Write-Output "SSL: $UseSSL"
+
+    # Base64エンコード関数
+    function ConvertTo-Base64($text) {{
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes($text)
+        return [System.Convert]::ToBase64String($bytes)
     }}
-    
-    exit 1
-}}'''
+
+    # SMTP応答読み取り関数
+    function Read-SmtpResponse($stream) {{
+        $reader = New-Object System.IO.StreamReader($stream)
+        $response = $reader.ReadLine()
+        Write-Output "< $response"
+        return $response
+    }}
+
+    # SMTPコマンド送信関数
+    function Send-SmtpCommand($stream, $command) {{
+        $writer = New-Object System.IO.StreamWriter($stream)
+        $writer.WriteLine($command)
+        $writer.Flush()
+        Write-Output "> $command"
+    }}
+
+    try {{
+        # TCP接続
+        Write-Output "--- TCP接続確立 ---"
+        $tcpClient = New-Object System.Net.Sockets.TcpClient
+        $tcpClient.Connect($SmtpServer, $SmtpPort)
+        
+        $stream = $tcpClient.GetStream()
+        
+        # SSL/TLS設定
+        if ($UseSSL) {{
+            Write-Output "SSL/TLS暗号化開始..."
+            $sslStream = New-Object System.Net.Security.SslStream($stream)
+            $sslStream.AuthenticateAsClient($SmtpServer)
+            $stream = $sslStream
+        }}
+        
+        # 初期応答
+        $response = Read-SmtpResponse $stream
+        if (-not $response.StartsWith("220")) {{
+            throw "SMTP初期応答エラー: $response"
+        }}
+        
+        # EHLO送信
+        Write-Output "--- EHLO送信 ---"
+        Send-SmtpCommand $stream "EHLO localhost"
+        
+        # EHLO応答を全て読み取り、対応認証方式を確認
+        $authMethods = @()
+        do {{
+            $response = Read-SmtpResponse $stream
+            if ($response -match "AUTH.*?(PLAIN|LOGIN|CRAM-MD5|DIGEST-MD5|NTLM)") {{
+                $authMethods += $matches[1]
+            }}
+            if ($response -match "250-AUTH (.+)") {{
+                $supportedAuths = $matches[1] -split " "
+                $authMethods += $supportedAuths
+            }}
+        }} while ($response.StartsWith("250-"))
+        
+        $authMethods = $authMethods | Sort-Object -Unique
+        Write-Output "対応認証方式: $($authMethods -join ', ')"
+        
+        # STARTTLS確認（SSLが無効でポート587の場合）
+        if (-not $UseSSL -and $SmtpPort -eq 587) {{
+            Write-Output "--- STARTTLS実行 ---"
+            Send-SmtpCommand $stream "STARTTLS"
+            $response = Read-SmtpResponse $stream
+            if ($response.StartsWith("220")) {{
+                Write-Output "STARTTLS暗号化開始..."
+                $sslStream = New-Object System.Net.Security.SslStream($stream)
+                $sslStream.AuthenticateAsClient($SmtpServer)
+                $stream = $sslStream
+                
+                # STARTTLS後にEHLOを再送信
+                Send-SmtpCommand $stream "EHLO localhost"
+                do {{
+                    $response = Read-SmtpResponse $stream
+                }} while ($response.StartsWith("250-"))
+            }}
+        }}
+        
+        # 認証方式を順番に試行
+        $authSuccess = $false
+        
+        foreach ($authMethod in @("CRAM-MD5", "DIGEST-MD5", "LOGIN", "PLAIN")) {{
+            if ($authMethods -contains $authMethod) {{
+                Write-Output "--- $authMethod 認証試行 ---"
+                
+                try {{
+                    switch ($authMethod) {{
+                        "PLAIN" {{
+                            $authString = ConvertTo-Base64("`0$SenderEmail`0$SenderPassword")
+                            Send-SmtpCommand $stream "AUTH PLAIN $authString"
+                        }}
+                        "LOGIN" {{
+                            Send-SmtpCommand $stream "AUTH LOGIN"
+                            $response = Read-SmtpResponse $stream
+                            if ($response.StartsWith("334")) {{
+                                Send-SmtpCommand $stream (ConvertTo-Base64 $SenderEmail)
+                                $response = Read-SmtpResponse $stream
+                                if ($response.StartsWith("334")) {{
+                                    Send-SmtpCommand $stream (ConvertTo-Base64 $SenderPassword)
+                                }}
+                            }}
+                        }}
+                        "CRAM-MD5" {{
+                            Send-SmtpCommand $stream "AUTH CRAM-MD5"
+                            $response = Read-SmtpResponse $stream
+                            if ($response.StartsWith("334")) {{
+                                $challenge = $response.Substring(4)
+                                Write-Output "CRAM-MD5チャレンジ受信: $challenge"
+                                
+                                # CRAM-MD5レスポンス計算
+                                $challengeBytes = [System.Convert]::FromBase64String($challenge)
+                                $challengeText = [System.Text.Encoding]::UTF8.GetString($challengeBytes)
+                                
+                                # HMAC-MD5計算
+                                $hmac = New-Object System.Security.Cryptography.HMACMD5
+                                $hmac.Key = [System.Text.Encoding]::UTF8.GetBytes($SenderPassword)
+                                $hash = $hmac.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($challengeText))
+                                $hashHex = [System.BitConverter]::ToString($hash) -replace "-", ""
+                                
+                                $cramResponse = "$SenderEmail " + $hashHex.ToLower()
+                                $encodedResponse = ConvertTo-Base64 $cramResponse
+                                Send-SmtpCommand $stream $encodedResponse
+                            }}
+                        }}
+                    }}
+                    
+                    $response = Read-SmtpResponse $stream
+                    if ($response.StartsWith("235")) {{
+                        Write-Output "$authMethod 認証成功！"
+                        $authSuccess = $true
+                        break
+                    }} else {{
+                        Write-Output "$authMethod 認証失敗: $response"
+                    }}
+                }} catch {{
+                    Write-Output "$authMethod 認証エラー: $($_.Exception.Message)"
+                }}
+            }}
+        }}
+        
+        if (-not $authSuccess) {{
+            throw "すべての認証方式で失敗しました"
+        }}
+        
+        # メール送信
+        Write-Output "--- メール送信 ---"
+        Send-SmtpCommand $stream "MAIL FROM:<$SenderEmail>"
+        $response = Read-SmtpResponse $stream
+        
+        Send-SmtpCommand $stream "RCPT TO:<$RecipientEmail>"
+        $response = Read-SmtpResponse $stream
+        
+        Send-SmtpCommand $stream "DATA"
+        $response = Read-SmtpResponse $stream
+        
+        # メールヘッダーと本文（Here-stringを使わない）
+        $writer = New-Object System.IO.StreamWriter($stream)
+        $writer.WriteLine("From: $SenderEmail")
+        $writer.WriteLine("To: $RecipientEmail")
+        $writer.WriteLine("Subject: RCScheduler 認証方式テスト")
+        $writer.WriteLine("Date: $(Get-Date -Format 'r')")
+        $writer.WriteLine("Content-Type: text/plain; charset=utf-8")
+        $writer.WriteLine("")
+        $writer.WriteLine("これはRCSchedulerからの認証方式テストメールです。")
+        $writer.WriteLine("")
+        $writer.WriteLine("使用された認証方式で送信成功しました。")
+        $writer.WriteLine("送信時刻: $(Get-Date)")
+        $writer.WriteLine("サーバー: $SmtpServer`:$SmtpPort")
+        $writer.WriteLine("SSL使用: $UseSSL")
+        $writer.WriteLine("")
+        $writer.WriteLine(".")
+        $writer.Flush()
+        
+        $response = Read-SmtpResponse $stream
+        if ($response.StartsWith("250")) {{
+            Write-Output "メール送信成功！"
+        }}
+        
+        Send-SmtpCommand $stream "QUIT"
+        Read-SmtpResponse $stream
+        
+        Write-Output "=== 送信完了 ==="
+        exit 0
+        
+    }} catch {{
+        Write-Output "エラー: $($_.Exception.Message)"
+        exit 1
+    }} finally {{
+        if ($stream) {{ $stream.Close() }}
+        if ($tcpClient) {{ $tcpClient.Close() }}
+    }}"""
             
-            # PowerShellスクリプトファイルをShift_JISで作成
-            with open(ps_path, 'w', encoding='cp932') as f:
-                f.write(ps_content)
+            # 一時的なPowerShellスクリプトファイルを作成
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.ps1', delete=False, encoding='cp932') as temp_file:
+                temp_file.write(ps_script_content)
+                temp_ps_path = temp_file.name
             
-            self.log_message(f"PowerShellスクリプトを生成しました (動的ログ対応): {ps_path}")
-            return ps_path
+            try:
+                # PowerShellスクリプトを実行
+                cmd = f'powershell -ExecutionPolicy Bypass -File "{temp_ps_path}"'
+                result = subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding='cp932', timeout=60)
+                
+                # 結果をログに出力
+                if result.stdout:
+                    for line in result.stdout.strip().split('\n'):
+                        if line.strip():
+                            self.log_message(f"  {line.strip()}")
+                
+                if result.stderr:
+                    for line in result.stderr.strip().split('\n'):
+                        if line.strip():
+                            self.log_message(f"  ERROR: {line.strip()}", "error")
+                
+                if result.returncode == 0:
+                    self.log_message("認証方式テスト送信成功", "success")
+                    messagebox.showinfo("送信成功", 
+                        f"認証方式テストでメール送信に成功しました。\n\n"
+                        f"ログで使用された認証方式を確認してください。\n"
+                        f"送信先メールボックスも確認してください。")
+                else:
+                    self.log_message("認証方式テスト送信失敗", "error")
+                    messagebox.showerror("送信失敗", 
+                        f"認証方式テストで送信に失敗しました。\n\n"
+                        f"詳細はログを確認してください。")
+            
+            finally:
+                # 一時ファイルを削除
+                try:
+                    os.unlink(temp_ps_path)
+                except:
+                    pass
             
         except Exception as e:
-            error_msg = f"PowerShellスクリプト生成エラー: {str(e)}"
+            error_msg = f"認証方式テストエラー: {str(e)}"
             self.log_message(error_msg, "error")
-            raise
+            messagebox.showerror("エラー", error_msg)
+
+    def send_test_email_with_multiple_configs(self):
+        """複数の設定でテストメールを送信"""
+        # 入力値の検証
+        required_fields = [
+            (self.smtp_server_var.get().strip(), "SMTPサーバー"),
+            (self.smtp_port_var.get().strip(), "ポート番号"),
+            (self.sender_email_var.get().strip(), "送信者メール"),
+            (self.sender_password_var.get().strip(), "送信者パスワード"),
+            (self.recipient_email_var.get().strip(), "送信先メール")
+        ]
+        
+        for value, field_name in required_fields:
+            if not value:
+                messagebox.showerror("エラー", f"{field_name}を入力してください")
+                return
+        
+        # ポート番号の検証
+        try:
+            port_num = int(self.smtp_port_var.get().strip())
+            if port_num < 1 or port_num > 65535:
+                raise ValueError()
+        except ValueError:
+            messagebox.showerror("エラー", "有効なポート番号を入力してください（1-65535）")
+            return
+        
+        # 確認ダイアログ
+        response = messagebox.askyesno("確認", 
+            f"複数の設定パターンでテストメールを送信します。\n\n"
+            f"送信先: {self.recipient_email_var.get()}\n"
+            f"SMTPサーバー: {self.smtp_server_var.get()}:{self.smtp_port_var.get()}\n\n"
+            f"続行しますか？")
+        
+        if not response:
+            return
+        
+        try:
+            self.log_message("複数設定でのテストメール送信開始...")
+            
+            # 基本情報
+            smtp_server = self.escape_powershell_string(self.smtp_server_var.get().strip())
+            smtp_port = self.smtp_port_var.get().strip()
+            sender_email = self.escape_powershell_string(self.sender_email_var.get().strip())
+            sender_password = self.escape_powershell_string(self.sender_password_var.get().strip())
+            recipient_email = self.escape_powershell_string(self.recipient_email_var.get().strip())
+            
+            # 複数の設定パターンを定義
+            config_patterns = [
+                {"name": "STARTTLS (Port 587推奨)", "ssl": "$false", "starttls": "$true"},
+                {"name": "SSL/TLS (Port 465用)", "ssl": "$true", "starttls": "$false"},
+                {"name": "平文接続", "ssl": "$false", "starttls": "$false"}
+            ]
+            
+            for i, config in enumerate(config_patterns, 1):
+                self.log_message(f"--- 設定パターン {i}: {config['name']} ---")
+                
+                # PowerShellスクリプトを生成
+                ps_script_content = f"""# 設定パターン {i}: {config['name']}
+    $ErrorActionPreference = "Stop"
+
+    $SmtpServer = "{smtp_server}"
+    $SmtpPort = {smtp_port}
+    $SenderEmail = "{sender_email}"
+    $SenderPassword = "{sender_password}"
+    $RecipientEmail = "{recipient_email}"
+    $UseSSL = {config['ssl']}
+    $UseStartTLS = {config['starttls']}
+
+    Write-Output "=== 設定パターン {i}: {config['name']} ==="
+    Write-Output "SSL: $UseSSL, STARTTLS: $UseStartTLS"
+
+    try {{
+        # 認証情報作成
+        $SecurePassword = ConvertTo-SecureString $SenderPassword -AsPlainText -Force
+        $Credential = New-Object System.Management.Automation.PSCredential($SenderEmail, $SecurePassword)
+        
+        # SMTPクライアント作成（詳細設定）
+        $SmtpClient = New-Object System.Net.Mail.SmtpClient($SmtpServer, $SmtpPort)
+        $SmtpClient.EnableSsl = $UseSSL
+        $SmtpClient.Credentials = $Credential
+        $SmtpClient.Timeout = 15000  # 15秒
+        $SmtpClient.DeliveryMethod = [System.Net.Mail.SmtpDeliveryMethod]::Network
+        
+        # STARTTLS設定（可能な場合）
+        if ($UseStartTLS -and -not $UseSSL) {{
+            Write-Output "STARTTLS設定を適用中..."
+            # .NET FrameworkのSMTPクライアントはSTARTTLSを自動的に処理
+        }}
+        
+        # メール作成
+        $MailMessage = New-Object System.Net.Mail.MailMessage
+        $MailMessage.From = $SenderEmail
+        $MailMessage.To.Add($RecipientEmail)
+        $MailMessage.Subject = "RCScheduler テスト ({config['name']})"
+        $MailMessage.Body = "設定パターン {i} ({config['name']}) でのテスト送信`n送信時刻: $(Get-Date)"
+        $MailMessage.BodyEncoding = [System.Text.Encoding]::UTF8
+        
+        Write-Output "メール送信開始..."
+        $SmtpClient.Send($MailMessage)
+        Write-Output "SUCCESS: 設定パターン {i} で送信成功"
+        exit 0
+        
+    }} catch [System.Net.Mail.SmtpException] {{
+        Write-Output "SMTP Error: $($_.Exception.Message)"
+        if ($_.Exception.StatusCode) {{
+            Write-Output "Status: $($_.Exception.StatusCode)"
+        }}
+    }} catch {{
+        Write-Output "Error: $($_.Exception.Message)"
+    }} finally {{
+        if ($MailMessage) {{ $MailMessage.Dispose() }}
+        if ($SmtpClient) {{ $SmtpClient.Dispose() }}
+    }}
+
+    Write-Output "設定パターン {i} 完了`n"
+    exit 1"""
+                
+                # 一時的なPowerShellスクリプトファイルを作成
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.ps1', delete=False, encoding='cp932') as temp_file:
+                    temp_file.write(ps_script_content)
+                    temp_ps_path = temp_file.name
+                
+                try:
+                    # PowerShellスクリプトを実行
+                    cmd = f'powershell -ExecutionPolicy Bypass -File "{temp_ps_path}"'
+                    result = subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding='cp932', timeout=30)
+                    
+                    # 結果をログに出力
+                    if result.stdout:
+                        for line in result.stdout.strip().split('\n'):
+                            if line.strip():
+                                self.log_message(f"  {line.strip()}")
+                    
+                    if result.stderr:
+                        for line in result.stderr.strip().split('\n'):
+                            if line.strip():
+                                self.log_message(f"  ERROR: {line.strip()}", "error")
+                    
+                    # 成功した場合は終了
+                    if result.returncode == 0:
+                        self.log_message(f"テストメール送信成功（設定パターン {i}）", "success")
+                        messagebox.showinfo("送信成功", 
+                            f"設定パターン {i} ({config['name']}) で送信に成功しました。\n\n"
+                            f"この設定をメール設定に反映してください：\n"
+                            f"・SSL使用: {'有効' if config['ssl'] == '$true' else '無効'}\n"
+                            f"・推奨設定: {config['name']}")
+                        return
+                    
+                except subprocess.TimeoutExpired:
+                    self.log_message(f"設定パターン {i} がタイムアウトしました", "error")
+                except Exception as e:
+                    self.log_message(f"設定パターン {i} でエラー: {str(e)}", "error")
+                finally:
+                    # 一時ファイルを削除
+                    try:
+                        os.unlink(temp_ps_path)
+                    except:
+                        pass
+            
+            # すべての設定パターンが失敗した場合
+            self.log_message("すべての設定パターンで送信に失敗しました", "error")
+            messagebox.showerror("送信失敗", 
+                f"すべての設定パターンで送信に失敗しました。\n\n"
+                f"確認事項：\n"
+                f"1. メールアドレスとパスワードが正しいか\n"
+                f"2. Gmail等では「アプリパスワード」が必要\n"
+                f"3. SMTPサーバー名とポート番号が正しいか\n"
+                f"4. ファイアウォールでブロックされていないか")
+            
+        except Exception as e:
+            error_msg = f"テストメール送信エラー: {str(e)}"
+            self.log_message(error_msg, "error")
+            messagebox.showerror("エラー", error_msg)
+
+    def toggle_email_settings(self):
+        """メール設定の有効/無効を切り替え"""
+        if self.email_enabled_var.get():
+            # メール設定を有効化
+            for widget in self.email_settings_frame.winfo_children():
+                if isinstance(widget, ttk.Frame):
+                    # フレーム内のウィジェットも有効化
+                    for child in widget.winfo_children():
+                        if hasattr(child, 'configure'):
+                            child.configure(state='normal')
+                elif hasattr(widget, 'configure'):
+                    widget.configure(state='normal')
+        else:
+            # メール設定を無効化
+            for widget in self.email_settings_frame.winfo_children():
+                if isinstance(widget, ttk.Frame):
+                    # フレーム内のウィジェットも無効化
+                    for child in widget.winfo_children():
+                        if hasattr(child, 'configure') and not isinstance(child, ttk.Label):
+                            child.configure(state='disabled')
+                elif hasattr(widget, 'configure') and not isinstance(widget, ttk.Label):
+                    widget.configure(state='disabled')
 
 def main():
     # GUIモードでのみ実行（--scheduledオプションは不要になった）
