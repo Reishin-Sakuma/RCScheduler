@@ -1194,15 +1194,15 @@ class RobocopyScheduler:
             self.disconnect_network_paths()
     
     def send_email(self, success, message):
-        """メールを送信（CRAM-MD5対応版）"""
+        """メールを送信（フレキシブル対応実運用版）"""
         if not self.email_enabled_var.get():
             return
         
         try:
             self.log_message("メール通知送信中...")
             
-            # PowerShellスクリプトを生成してCRAM-MD5で送信
-            ps_script_path = self.generate_cram_md5_mail_script(success, message)
+            # フレキシブル設定でPowerShellスクリプトを生成
+            ps_script_path = self.generate_flexible_mail_script(success, message)
             
             # PowerShellスクリプトを実行
             cmd = f'powershell -ExecutionPolicy Bypass -File "{ps_script_path}"'
@@ -1210,10 +1210,7 @@ class RobocopyScheduler:
             
             if result.returncode == 0:
                 self.log_message("メール通知送信完了")
-                if result.stdout:
-                    for line in result.stdout.strip().split('\n'):
-                        if line.strip():
-                            self.log_message(f"  {line.strip()}")
+                # 詳細ログは出力しない（実運用のため）
             else:
                 self.log_message("メール通知送信失敗", "error")
                 if result.stderr:
@@ -1221,6 +1218,8 @@ class RobocopyScheduler:
                         if line.strip():
                             self.log_message(f"  ERROR: {line.strip()}", "error")
                             
+        except subprocess.TimeoutExpired:
+            self.log_message("メール通知送信タイムアウト", "error")
         except Exception as e:
             self.log_message(f"メール送信エラー: {str(e)}", "error")
     
