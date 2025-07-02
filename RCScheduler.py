@@ -10,6 +10,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import glob
 from datetime import timedelta
+import tempfile
 
 class RobocopyScheduler:
     def __init__(self, root):
@@ -486,43 +487,69 @@ class RobocopyScheduler:
         # メール設定セクション
         email_frame = ttk.LabelFrame(main_frame, text="メール通知設定", padding="10")
         email_frame.grid(row=2, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
-        
+
         # メール送信有効化チェックボックス
         self.email_enabled_var = tk.BooleanVar()
         email_check = ttk.Checkbutton(email_frame, text="実行結果をメールで送信", 
-                                     variable=self.email_enabled_var,
-                                     command=self.toggle_email_settings)
+                                    variable=self.email_enabled_var,
+                                    command=self.toggle_email_settings)
         email_check.grid(row=0, column=0, columnspan=2, sticky=tk.W)
-        
+
         # SMTPサーバー設定
         self.email_settings_frame = ttk.Frame(email_frame)
         self.email_settings_frame.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E))
-        
+
         ttk.Label(self.email_settings_frame, text="SMTPサーバー:").grid(row=0, column=0, sticky=tk.W)
         self.smtp_server_var = tk.StringVar(value="smtp.gmail.com")
         ttk.Entry(self.email_settings_frame, textvariable=self.smtp_server_var, width=30).grid(row=0, column=1, padx=5)
-        
+
         ttk.Label(self.email_settings_frame, text="ポート:").grid(row=0, column=2, sticky=tk.W)
         self.smtp_port_var = tk.StringVar(value="587")
         ttk.Entry(self.email_settings_frame, textvariable=self.smtp_port_var, width=10).grid(row=0, column=3, padx=5)
 
-        self.use_ssl_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(self.email_settings_frame, text="SSLを使用", variable=self.use_ssl_var).grid(row=0, column=4, padx=5)
-        
-        ttk.Label(self.email_settings_frame, text="送信者メール:").grid(row=1, column=0, sticky=tk.W)
+        # 接続の保護プルダウン（修正版）
+        ttk.Label(self.email_settings_frame, text="接続の保護:").grid(row=1, column=0, sticky=tk.W)
+        self.connection_security_var = tk.StringVar(value="STARTTLS")
+        self.connection_security_combo = ttk.Combobox(self.email_settings_frame, 
+                                                    textvariable=self.connection_security_var,
+                                                    values=["暗号化なし", "STARTTLS", "SSL/TLS"],
+                                                    width=15,
+                                                    state='readonly')  # この書き方に変更
+        self.connection_security_combo.grid(row=1, column=1, padx=5)
+
+        # 認証方式プルダウン（修正版）
+        ttk.Label(self.email_settings_frame, text="認証方式:").grid(row=1, column=2, sticky=tk.W)
+        self.auth_method_var = tk.StringVar(value="CRAM-MD5")
+        self.auth_method_combo = ttk.Combobox(self.email_settings_frame, 
+                                            textvariable=self.auth_method_var,
+                                            values=["CRAM-MD5", "LOGIN", "PLAIN", "DIGEST-MD5"],
+                                            width=15,
+                                            state='readonly')  # この書き方に変更
+        self.auth_method_combo.grid(row=1, column=3, padx=5)
+
+        ttk.Label(self.email_settings_frame, text="送信者メール:").grid(row=2, column=0, sticky=tk.W)
         self.sender_email_var = tk.StringVar()
-        ttk.Entry(self.email_settings_frame, textvariable=self.sender_email_var, width=40).grid(row=1, column=1, columnspan=2, padx=5)
-        
-        ttk.Label(self.email_settings_frame, text="送信者パスワード:").grid(row=2, column=0, sticky=tk.W)
+        ttk.Entry(self.email_settings_frame, textvariable=self.sender_email_var, width=40).grid(row=2, column=1, columnspan=2, padx=5)
+
+        ttk.Label(self.email_settings_frame, text="送信者パスワード:").grid(row=3, column=0, sticky=tk.W)
         self.sender_password_var = tk.StringVar()
         ttk.Entry(self.email_settings_frame, textvariable=self.sender_password_var, 
-                 width=40, show="*").grid(row=2, column=1, columnspan=2, padx=5)
-        
-        ttk.Label(self.email_settings_frame, text="送信先メール:").grid(row=3, column=0, sticky=tk.W)
+                width=40, show="*").grid(row=3, column=1, columnspan=2, padx=5)
+
+        ttk.Label(self.email_settings_frame, text="送信先メール:").grid(row=4, column=0, sticky=tk.W)
         self.recipient_email_var = tk.StringVar()
         ttk.Entry(self.email_settings_frame, textvariable=self.recipient_email_var, 
-                 width=40).grid(row=3, column=1, columnspan=2, padx=5)
-        
+                width=40).grid(row=4, column=1, columnspan=2, padx=5)
+
+        # SMTP接続テストボタン
+        smtp_test_frame = ttk.Frame(self.email_settings_frame)
+        smtp_test_frame.grid(row=5, column=0, columnspan=5, pady=10)
+
+        ttk.Button(smtp_test_frame, text="SMTP接続テスト", 
+                command=self.test_smtp_connection).grid(row=0, column=0, padx=5)
+        ttk.Button(smtp_test_frame, text="メールテスト", 
+                command=self.send_email_with_flexible_auth).grid(row=0, column=1, padx=5)  # 新しいメソッド名
+
         # 初期状態ではメール設定を無効化
         self.toggle_email_settings()
         
@@ -791,11 +818,22 @@ class RobocopyScheduler:
         if self.email_enabled_var.get():
             # メール設定を有効化
             for widget in self.email_settings_frame.winfo_children():
-                widget.configure(state='normal')
+                if isinstance(widget, ttk.Frame):
+                    # フレーム内のウィジェットも有効化
+                    for child in widget.winfo_children():
+                        if hasattr(child, 'configure'):
+                            child.configure(state='normal')
+                elif hasattr(widget, 'configure'):
+                    widget.configure(state='normal')
         else:
             # メール設定を無効化
             for widget in self.email_settings_frame.winfo_children():
-                if isinstance(widget, ttk.Entry):
+                if isinstance(widget, ttk.Frame):
+                    # フレーム内のウィジェットも無効化
+                    for child in widget.winfo_children():
+                        if hasattr(child, 'configure') and not isinstance(child, ttk.Label):
+                            child.configure(state='disabled')
+                elif hasattr(widget, 'configure') and not isinstance(widget, ttk.Label):
                     widget.configure(state='disabled')
     
     def log_message(self, message, tag=None):
@@ -1156,45 +1194,32 @@ class RobocopyScheduler:
             self.disconnect_network_paths()
     
     def send_email(self, success, message):
-        """メールを送信（GUI用・日時付きログファイル対応）"""
+        """メールを送信（フレキシブル対応実運用版）"""
         if not self.email_enabled_var.get():
             return
         
         try:
-            # PowerShellスクリプトを生成
-            ps_script_path = self.generate_powershell_mail_script()
+            self.log_message("メール通知送信中...")
             
-            # GUI実行時のログファイル名を取得
-            gui_log_file = getattr(self, '_current_gui_log_file', '')
-            if gui_log_file and os.path.exists(gui_log_file):
-                log_file_arg = f'"{gui_log_file}"'
-            else:
-                log_file_arg = '""'  # 空文字列を渡す
+            # フレキシブル設定でPowerShellスクリプトを生成
+            ps_script_path = self.generate_flexible_mail_script(success, message)
             
             # PowerShellスクリプトを実行
-            success_flag = "1" if success else "0"
-            cmd = f'powershell -ExecutionPolicy Bypass -File "{ps_script_path}" {success_flag} {log_file_arg}'
-            
-            self.log_message("PowerShellスクリプトでメール送信中...")
-            
-            result = subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding='cp932')
+            cmd = f'powershell -ExecutionPolicy Bypass -File "{ps_script_path}"'
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding='cp932', timeout=60)
             
             if result.returncode == 0:
-                self.log_message("メール送信完了")
-                # PowerShellの出力をログに記録
-                if result.stdout:
-                    for line in result.stdout.strip().split('\n'):
-                        if line.strip():
-                            self.log_message(f"  {line.strip()}")
+                self.log_message("メール通知送信完了")
+                # 詳細ログは出力しない（実運用のため）
             else:
-                error_msg = f"メール送信エラー: {result.stderr.strip() if result.stderr else '不明なエラー'}"
-                self.log_message(error_msg, "error")
-                # PowerShellの出力をログに記録
-                if result.stdout:
-                    for line in result.stdout.strip().split('\n'):
+                self.log_message("メール通知送信失敗", "error")
+                if result.stderr:
+                    for line in result.stderr.strip().split('\n'):
                         if line.strip():
-                            self.log_message(f"  {line.strip()}", "error")
-            
+                            self.log_message(f"  ERROR: {line.strip()}", "error")
+                            
+        except subprocess.TimeoutExpired:
+            self.log_message("メール通知送信タイムアウト", "error")
         except Exception as e:
             self.log_message(f"メール送信エラー: {str(e)}", "error")
     
@@ -1376,26 +1401,27 @@ class RobocopyScheduler:
         config = {
             'source': self.source_var.get(),
             'dest': self.dest_var.get(),
-            'task_name': self.task_name_var.get(),  # タスク名を追加
+            'task_name': self.task_name_var.get(),
             'copy_mode': self.copy_mode_var.get(),
             'robocopy_options': {var_name: var.get() for var_name, var in self.option_vars.items()},
             'retry_count': self.retry_var.get(),
             'wait_time': self.wait_var.get(),
             'log_file': self.log_file_var.get(),
             'custom_options': self.custom_options_var.get(),
-            'frequency': self.get_frequency_code(),  # 内部コードで保存
-            'weekday': self.get_weekday_code(),      # 内部コードで保存
+            'frequency': self.get_frequency_code(),
+            'weekday': self.get_weekday_code(),
             'hour': self.hour_var.get(),
             'minute': self.minute_var.get(),
             'email_enabled': self.email_enabled_var.get(),
             'smtp_server': self.smtp_server_var.get(),
             'smtp_port': self.smtp_port_var.get(),
+            'connection_security': self.connection_security_var.get(),  # 新規追加
+            'auth_method': self.auth_method_var.get(),                  # 新規追加
             'sender_email': self.sender_email_var.get(),
             'sender_password': self.sender_password_var.get(),
             'recipient_email': self.recipient_email_var.get(),
             'history_enabled': self.history_enabled_var.get(),
-            'use_ssl': self.use_ssl_var.get(),
-            # 認証情報を追加
+            # 認証情報
             'source_auth_enabled': self.source_auth_enabled_var.get(),
             'source_username': self.source_username_var.get(),
             'source_password': self.source_password_var.get(),
@@ -1414,11 +1440,11 @@ class RobocopyScheduler:
             
         except Exception as e:
             error_msg = f"設定保存エラー: {str(e)}"
-            self.log_message(error_msg , "error")
+            self.log_message(error_msg, "error")
             messagebox.showerror("エラー", error_msg)
 
     def load_config(self):
-        """設定をファイルから読み込み"""
+        """設定をファイルから読み込み（新旧設定互換版）"""
         if not os.path.exists(self.config_file):
             return
         
@@ -1426,21 +1452,20 @@ class RobocopyScheduler:
             with open(self.config_file, 'r', encoding='utf-8') as f:
                 config = json.load(f)
             
+            # 基本設定の読み込み
             self.source_var.set(config.get('source', ''))
             self.dest_var.set(config.get('dest', ''))
             
-            # タスク名の読み込み（デフォルト値を設定）
+            # タスク名の読み込み
             saved_task_name = config.get('task_name', '')
             if saved_task_name:
                 self.task_name_var.set(saved_task_name)
             else:
-                # 保存されたタスク名がない場合は自動生成
                 self.update_task_name_from_dest()
             
             # コピーモードの読み込み
             self.copy_mode_var.set(config.get('copy_mode', 'MIR'))
             
-            # 以下は既存のコードと同じ...
             # オプション設定の読み込み
             robocopy_options = config.get('robocopy_options', {})
             for var_name, var in self.option_vars.items():
@@ -1451,8 +1476,7 @@ class RobocopyScheduler:
             self.log_file_var.set(config.get('log_file', 'robocopy_log.txt'))
             self.custom_options_var.set(config.get('custom_options', ''))
             
-            # 既存の設定読み込み（変更なし）
-            # スケジュール設定の読み込み（内部コードから表示文字列に変換）
+            # スケジュール設定の読み込み
             frequency_code = config.get('frequency', 'DAILY')
             weekday_code = config.get('weekday', 'MON')
             
@@ -1466,14 +1490,44 @@ class RobocopyScheduler:
             self.weekday_var.set(weekday_display_map.get(weekday_code, "月曜日"))
             self.hour_var.set(config.get('hour', '09'))
             self.minute_var.set(config.get('minute', '00'))
+            
+            # メール設定の読み込み（新旧互換性対応）
             self.email_enabled_var.set(config.get('email_enabled', False))
             self.smtp_server_var.set(config.get('smtp_server', 'smtp.gmail.com'))
             self.smtp_port_var.set(config.get('smtp_port', '587'))
             self.sender_email_var.set(config.get('sender_email', ''))
             self.sender_password_var.set(config.get('sender_password', ''))
             self.recipient_email_var.set(config.get('recipient_email', ''))
+            
+            # 新しい設定（接続の保護・認証方式）の読み込み
+            if 'connection_security' in config:
+                # 新しい設定ファイルの場合
+                self.connection_security_var.set(config.get('connection_security', 'STARTTLS'))
+                self.auth_method_var.set(config.get('auth_method', 'CRAM-MD5'))
+            else:
+                # 古い設定ファイルの場合は変換
+                old_use_ssl = config.get('use_ssl', False)
+                old_smtp_port = config.get('smtp_port', '587')
+                
+                # 古いSSL設定を新しい接続の保護設定に変換
+                if old_use_ssl:
+                    if old_smtp_port == '465':
+                        self.connection_security_var.set('SSL/TLS')
+                    else:
+                        self.connection_security_var.set('SSL/TLS')  # 明示的にSSLが有効だった場合
+                else:
+                    if old_smtp_port == '587':
+                        self.connection_security_var.set('STARTTLS')  # ポート587の一般的な設定
+                    else:
+                        self.connection_security_var.set('暗号化なし')
+                
+                # 認証方式はデフォルトをCRAM-MD5に設定
+                self.auth_method_var.set('CRAM-MD5')
+                
+                self.log_message("古い設定ファイルを新しい形式に変換しました")
+            
+            # タスク履歴設定
             self.history_enabled_var.set(config.get('history_enabled', False))
-            self.use_ssl_var.set(config.get('use_ssl', False))
             
             # 認証情報の読み込み
             self.source_auth_enabled_var.set(config.get('source_auth_enabled', False))
@@ -1485,36 +1539,19 @@ class RobocopyScheduler:
             self.dest_password_var.set(config.get('dest_password', ''))
             self.dest_domain_var.set(config.get('dest_domain', ''))
             
+            # UI状態の更新
             self.toggle_email_settings()
-            # 認証設定の状態を更新
             self.update_auth_state()
-            # 曜日選択の状態を更新
             self.update_weekday_state()
+            
             self.log_message("設定を読み込みました")
             
         except Exception as e:
-            self.log_message(f"設定読み込みエラー: {str(e)}" , "error")
-
-    def generate_batch_script(self, task_name):
-        """タスクスケジューラ用のバッチファイルを生成（SJIS対応）"""
-        try:
-            batch_filename = f"{task_name}.bat"
-            batch_path = os.path.abspath(batch_filename)
-            
-            # バッチファイルの内容を構築
-            batch_content = self.build_batch_content()
-            
-            # バッチファイルをSJIS(CP932)で作成
-            with open(batch_path, 'w', encoding='cp932') as f:
-                f.write(batch_content)
-            
-            self.log_message(f"バッチファイルを生成しました (SJIS): {batch_path}")
-            return batch_path
-            
-        except Exception as e:
-            error_msg = f"バッチファイル生成エラー: {str(e)}"
-            self.log_message(error_msg, "error")
-            raise
+            self.log_message(f"設定読み込みエラー: {str(e)}", "error")
+            # エラーが発生した場合はデフォルト設定を適用
+            self.connection_security_var.set('STARTTLS')
+            self.auth_method_var.set('CRAM-MD5')
+            self.log_message("デフォルト設定を適用しました")
 
     def build_batch_content(self):
         """バッチファイルの内容を構築（実行毎別ログファイル版）"""
@@ -1775,185 +1812,516 @@ class RobocopyScheduler:
         batch_lines.extend(cleanup_lines)
         
         return "\n".join(batch_lines)
-
-    def generate_powershell_mail_script(self):
-        """メール送信用のPowerShellスクリプトを生成（動的ログファイル対応版）"""
+    
+    def test_smtp_connection(self):
+        """SMTP接続をテスト（フレキシブル対応版）"""
+        smtp_server = self.smtp_server_var.get().strip()
+        smtp_port = self.smtp_port_var.get().strip()
+        
+        if not smtp_server:
+            messagebox.showerror("エラー", "SMTPサーバーを入力してください")
+            return
+        
+        if not smtp_port:
+            messagebox.showerror("エラー", "ポート番号を入力してください")
+            return
+        
         try:
-            ps_filename = f"{self.task_name_var.get()}_mail.ps1"
+            port_num = int(smtp_port)
+            if port_num < 1 or port_num > 65535:
+                raise ValueError()
+        except ValueError:
+            messagebox.showerror("エラー", "有効なポート番号を入力してください（1-65535）")
+            return
+        
+        try:
+            self.log_message(f"SMTP接続テスト開始: {smtp_server}:{smtp_port}")
+            
+            # 接続の保護設定を取得
+            connection_security = self.connection_security_var.get()
+            use_ssl = connection_security == "SSL/TLS"
+            
+            # PowerShellスクリプトでSMTP接続をテスト
+            ps_script_content = f'''# SMTP接続テスト（フレキシブル版）
+    $ErrorActionPreference = "Stop"
+
+    $SmtpServer = "{self.escape_powershell_string(smtp_server)}"
+    $SmtpPort = {smtp_port}
+    $UseSSL = {"$true" if use_ssl else "$false"}
+    $ConnectionSecurity = "{connection_security}"
+
+    Write-Output "SMTP接続テスト開始: $SmtpServer`:$SmtpPort"
+    Write-Output "接続の保護: $ConnectionSecurity"
+
+    try {{
+        # TCP接続テスト
+        $tcpTest = Test-NetConnection -ComputerName $SmtpServer -Port $SmtpPort -WarningAction SilentlyContinue
+        
+        if ($tcpTest.TcpTestSucceeded) {{
+            Write-Output "TCP接続成功"
+            
+            # SMTP接続テスト
+            $tcpClient = New-Object System.Net.Sockets.TcpClient
+            $tcpClient.ReceiveTimeout = 10000
+            $tcpClient.SendTimeout = 10000
+            $tcpClient.Connect($SmtpServer, $SmtpPort)
+            
+            if ($tcpClient.Connected) {{
+                $stream = $tcpClient.GetStream()
+                
+                # SSL/TLS処理
+                if ($UseSSL) {{
+                    Write-Output "SSL/TLS暗号化開始..."
+                    $sslStream = New-Object System.Net.Security.SslStream($stream)
+                    $sslStream.AuthenticateAsClient($SmtpServer)
+                    $stream = $sslStream
+                }}
+                
+                $reader = New-Object System.IO.StreamReader($stream)
+                $writer = New-Object System.IO.StreamWriter($stream)
+                
+                # SMTPサーバーからの初期レスポンス
+                $response = $reader.ReadLine()
+                Write-Output "SMTPサーバー応答: $response"
+                
+                # STARTTLS確認
+                if ($ConnectionSecurity -eq "STARTTLS" -and -not $UseSSL) {{
+                    Write-Output "EHLO送信（STARTTLS確認用）..."
+                    $writer.WriteLine("EHLO localhost")
+                    $writer.Flush()
+                    
+                    do {{
+                        $response = $reader.ReadLine()
+                        Write-Output "EHLO応答: $response"
+                        if ($response -match "STARTTLS") {{
+                            Write-Output "STARTTLS対応確認"
+                        }}
+                    }} while ($response.StartsWith("250-"))
+                }}
+                
+                # QUITで終了
+                $writer.WriteLine("QUIT")
+                $writer.Flush()
+                
+                $stream.Close()
+                $tcpClient.Close()
+                
+                Write-Output "SMTP接続テスト成功"
+                exit 0
+            }}
+        }} else {{
+            Write-Output "TCP接続に失敗しました"
+            exit 1
+        }}
+    }} catch {{
+        Write-Output "接続テストエラー: $($_.Exception.Message)"
+        exit 1
+    }}'''
+            
+            # 一時的なPowerShellスクリプトファイルを作成
+            import tempfile
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.ps1', delete=False, encoding='cp932') as temp_file:
+                temp_file.write(ps_script_content)
+                temp_ps_path = temp_file.name
+            
+            try:
+                # PowerShellスクリプトを実行
+                cmd = f'powershell -ExecutionPolicy Bypass -File "{temp_ps_path}"'
+                result = subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding='cp932')
+                
+                # 結果をログに出力
+                if result.stdout:
+                    for line in result.stdout.strip().split('\n'):
+                        if line.strip():
+                            self.log_message(f"  {line.strip()}")
+                
+                if result.stderr:
+                    for line in result.stderr.strip().split('\n'):
+                        if line.strip():
+                            self.log_message(f"  ERROR: {line.strip()}", "error")
+                
+                if result.returncode == 0:
+                    self.log_message("SMTP接続テスト成功", "success")
+                    messagebox.showinfo("接続テスト成功", 
+                        f"SMTPサーバーへの接続に成功しました。\n\n"
+                        f"サーバー: {smtp_server}\n"
+                        f"ポート: {smtp_port}\n"
+                        f"接続の保護: {connection_security}")
+                else:
+                    self.log_message("SMTP接続テスト失敗", "error")
+                    messagebox.showerror("接続テスト失敗", 
+                        f"SMTPサーバーへの接続に失敗しました。\n\n"
+                        f"詳細はログを確認してください。")
+            
+            finally:
+                # 一時ファイルを削除
+                try:
+                    os.unlink(temp_ps_path)
+                except:
+                    pass
+                    
+        except Exception as e:
+            error_msg = f"SMTP接続テストエラー: {str(e)}"
+            self.log_message(error_msg, "error")
+            messagebox.showerror("エラー", error_msg)
+
+    def send_email_with_flexible_auth(self):
+        """選択された認証方式でメール送信"""
+        # 入力値の検証
+        required_fields = [
+            (self.smtp_server_var.get().strip(), "SMTPサーバー"),
+            (self.smtp_port_var.get().strip(), "ポート番号"),
+            (self.sender_email_var.get().strip(), "送信者メール"),
+            (self.sender_password_var.get().strip(), "送信者パスワード"),
+            (self.recipient_email_var.get().strip(), "送信先メール")
+        ]
+        
+        for value, field_name in required_fields:
+            if not value:
+                messagebox.showerror("エラー", f"{field_name}を入力してください")
+                return
+        
+        try:
+            port_num = int(self.smtp_port_var.get().strip())
+            if port_num < 1 or port_num > 65535:
+                raise ValueError()
+        except ValueError:
+            messagebox.showerror("エラー", "有効なポート番号を入力してください（1-65535）")
+            return
+        
+        # 設定確認
+        connection_security = self.connection_security_var.get()
+        auth_method = self.auth_method_var.get()
+        
+        response = messagebox.askyesno("確認", 
+            f"以下の設定でメールを送信します。\n\n"
+            f"SMTPサーバー: {self.smtp_server_var.get()}:{self.smtp_port_var.get()}\n"
+            f"接続の保護: {connection_security}\n"
+            f"認証方式: {auth_method}\n"
+            f"送信先: {self.recipient_email_var.get()}\n\n"
+            f"続行しますか？")
+        
+        if not response:
+            return
+        
+        try:
+            self.log_message(f"フレキシブル認証メール送信開始 ({connection_security} + {auth_method})...")
+            
+            # PowerShellスクリプトを生成
+            ps_script_path = self.generate_flexible_mail_script(True, "テストメール送信")
+            
+            # PowerShellスクリプトを実行
+            cmd = f'powershell -ExecutionPolicy Bypass -File "{ps_script_path}"'
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding='cp932', timeout=60)
+            
+            # 結果をログに出力
+            if result.stdout:
+                for line in result.stdout.strip().split('\n'):
+                    if line.strip():
+                        self.log_message(f"  {line.strip()}")
+            
+            if result.stderr:
+                for line in result.stderr.strip().split('\n'):
+                    if line.strip():
+                        self.log_message(f"  ERROR: {line.strip()}", "error")
+            
+            if result.returncode == 0:
+                self.log_message("フレキシブル認証メール送信成功", "success")
+                messagebox.showinfo("送信成功", 
+                    f"メール送信に成功しました！\n\n"
+                    f"接続方式: {connection_security}\n"
+                    f"認証方式: {auth_method}\n\n"
+                    f"送信先メールボックスを確認してください。")
+            else:
+                self.log_message("フレキシブル認証メール送信失敗", "error")
+                messagebox.showerror("送信失敗", 
+                    f"メール送信に失敗しました。\n\n"
+                    f"詳細はログを確認してください。")
+        
+        except subprocess.TimeoutExpired:
+            error_msg = "メール送信がタイムアウトしました（60秒）"
+            self.log_message(error_msg, "error")
+            messagebox.showerror("タイムアウト", error_msg)
+        except Exception as e:
+            error_msg = f"フレキシブル認証メール送信エラー: {str(e)}"
+            self.log_message(error_msg, "error")
+            messagebox.showerror("エラー", error_msg)
+
+    def generate_flexible_mail_script(self, success, message):
+        """フレキシブル認証用メールスクリプトを生成"""
+        try:
+            ps_filename = f"{self.task_name_var.get()}_flexible_mail.ps1"
             ps_path = os.path.abspath(ps_filename)
             
-            smtp_server = self.escape_powershell_string(self.smtp_server_var.get())
-            smtp_port = self.smtp_port_var.get()
-            sender_email = self.escape_powershell_string(self.sender_email_var.get())
-            sender_password = self.escape_powershell_string(self.sender_password_var.get())
-            recipient_email = self.escape_powershell_string(self.recipient_email_var.get())
-            use_ssl = "$true" if self.use_ssl_var.get() else "$false"
+            # 設定値を準備
+            smtp_server = self.escape_powershell_string(self.smtp_server_var.get().strip())
+            smtp_port = self.smtp_port_var.get().strip()
+            sender_email = self.escape_powershell_string(self.sender_email_var.get().strip())
+            sender_password = self.escape_powershell_string(self.sender_password_var.get().strip())
+            recipient_email = self.escape_powershell_string(self.recipient_email_var.get().strip())
             
-            # パスをエスケープ
+            # 接続・認証設定
+            connection_security = self.connection_security_var.get()
+            auth_method = self.auth_method_var.get()
+            use_ssl = connection_security == "SSL/TLS"
+            use_starttls = connection_security == "STARTTLS"
+            
+            # パス情報
             source_path = self.escape_powershell_string(self.source_var.get())
             dest_path = self.escape_powershell_string(self.dest_var.get())
             
-            # ベースログファイルのパスを取得
-            base_log_file = self.log_file_var.get() if self.log_file_var.get() else "robocopy_schedule_log"
-            if base_log_file.endswith('.txt'):
-                base_log_file = base_log_file[:-4]
-            base_log_dir = os.path.dirname(os.path.abspath(base_log_file))
-            base_log_name = os.path.basename(base_log_file)
+            # メール件名
+            subject = "RCScheduler テストメール - " + ("成功" if success else "失敗")
             
-            ps_content = f'''# PowerShell メール送信スクリプト（動的ログファイル対応）
-# 文字エンコーディングをShift_JISに設定
-[Console]::OutputEncoding = [System.Text.Encoding]::GetEncoding("Shift_JIS")
+            # フレキシブル認証PowerShellスクリプト
+            ps_content = f'''# RCScheduler フレキシブル認証メール送信
+    $ErrorActionPreference = "Stop"
 
-param(
-    [string]$BackupSuccess = "0",
-    [string]$LogFilePath = ""
-)
+    # 設定
+    $SmtpServer = "{smtp_server}"
+    $SmtpPort = {smtp_port}
+    $SenderEmail = "{sender_email}"
+    $SenderPassword = "{sender_password}"
+    $RecipientEmail = "{recipient_email}"
+    $UseSSL = {"$true" if use_ssl else "$false"}
+    $UseSTARTTLS = {"$true" if use_starttls else "$false"}
+    $AuthMethod = "{auth_method}"
+    $ConnectionSecurity = "{connection_security}"
 
-# メール設定
-$SmtpServer = "{smtp_server}"
-$SmtpPort = {smtp_port}
-$SenderEmail = "{sender_email}"
-$SenderPassword = "{sender_password}"
-$RecipientEmail = "{recipient_email}"
-$UseSSL = {use_ssl}
+    Write-Output "=== フレキシブル認証メール送信 ==="
+    Write-Output "接続の保護: $ConnectionSecurity"
+    Write-Output "認証方式: $AuthMethod"
 
-try {{
-    Write-Output "[$(Get-Date -Format 'yyyy/MM/dd HH:mm:ss')] メール送信開始"
-    
-    # 件名と本文を設定
-    if ($BackupSuccess -eq "1") {{
-        $Subject = "Robocopyバックアップ結果 - 成功"
-        $Result = "成功"
-    }} else {{
-        $Subject = "Robocopyバックアップ結果 - 失敗"
-        $Result = "失敗"
+    function ConvertTo-Base64($text) {{
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes($text)
+        return [System.Convert]::ToBase64String($bytes)
     }}
-    
-    # ログファイルの処理
-    $LogDetails = ""
-    $LogFile = ""
-    
-    if ($LogFilePath -and (Test-Path $LogFilePath)) {{
-        # バッチファイルから渡されたログファイルを使用
-        $LogFile = $LogFilePath
-        Write-Output "指定されたログファイルを使用: $LogFile"
-    }} else {{
-        # 最新のログファイルを検索
-        $LogDir = "{base_log_dir}"
-        $LogPattern = "{base_log_name}_*.txt"
-        
-        Write-Output "ログファイルを検索中: $LogDir\\$LogPattern"
-        
-        $LatestLog = Get-ChildItem -Path $LogDir -Filter $LogPattern -ErrorAction SilentlyContinue | 
-                     Sort-Object LastWriteTime -Descending | 
-                     Select-Object -First 1
-        
-        if ($LatestLog) {{
-            $LogFile = $LatestLog.FullName
-            Write-Output "最新のログファイルを発見: $LogFile"
-        }} else {{
-            Write-Output "ログファイルが見つかりません"
-        }}
-    }}
-    
-    # ログファイルの内容を読み取り
-    if ($LogFile -and (Test-Path $LogFile)) {{
-        try {{
-            # ログファイル全体をShift_JISで読み込み（最大1000行）
-            $AllLines = Get-Content $LogFile -Encoding Default -ErrorAction SilentlyContinue
-            
-            if ($AllLines) {{
-                # ファイルサイズが大きい場合は最後の50行のみ
-                if ($AllLines.Count -gt 50) {{
-                    $LogLines = $AllLines | Select-Object -Last 50
-                    $LogDetails = "`n`n=== ログファイル内容（最新50行） ===`n" + ($LogLines -join "`n")
-                }} else {{
-                    $LogDetails = "`n`n=== ログファイル内容（全体） ===`n" + ($AllLines -join "`n")
+
+    function Send-AuthCommand($writer, $reader, $authMethod, $username, $password) {{
+        switch ($authMethod) {{
+            "CRAM-MD5" {{
+                Write-Output "CRAM-MD5認証実行中..."
+                $writer.WriteLine("AUTH CRAM-MD5")
+                $writer.Flush()
+                $response = $reader.ReadLine()
+                
+                if ($response.StartsWith("334")) {{
+                    $challenge = $response.Substring(4)
+                    $challengeBytes = [System.Convert]::FromBase64String($challenge)
+                    $challengeText = [System.Text.Encoding]::UTF8.GetString($challengeBytes)
+                    
+                    $hmac = New-Object System.Security.Cryptography.HMACMD5
+                    $hmac.Key = [System.Text.Encoding]::UTF8.GetBytes($password)
+                    $hash = $hmac.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($challengeText))
+                    $hashHex = [System.BitConverter]::ToString($hash) -replace "-", ""
+                    
+                    $cramResponse = "$username " + $hashHex.ToLower()
+                    $encodedResponse = ConvertTo-Base64 $cramResponse
+                    $writer.WriteLine($encodedResponse)
+                    $writer.Flush()
                 }}
-            }} else {{
-                $LogDetails = "`n`nログファイルは空です。"
             }}
-        }} catch {{
-            $LogDetails = "`n`nログファイルの読み取りに失敗しました: $($_.Exception.Message)"
+            "LOGIN" {{
+                Write-Output "LOGIN認証実行中..."
+                $writer.WriteLine("AUTH LOGIN")
+                $writer.Flush()
+                $response = $reader.ReadLine()
+                if ($response.StartsWith("334")) {{
+                    $writer.WriteLine((ConvertTo-Base64 $username))
+                    $writer.Flush()
+                    $response = $reader.ReadLine()
+                    if ($response.StartsWith("334")) {{
+                        $writer.WriteLine((ConvertTo-Base64 $password))
+                        $writer.Flush()
+                    }}
+                }}
+            }}
+            "PLAIN" {{
+                Write-Output "PLAIN認証実行中..."
+                $authString = ConvertTo-Base64("`0$username`0$password")
+                $writer.WriteLine("AUTH PLAIN $authString")
+                $writer.Flush()
+            }}
+            "DIGEST-MD5" {{
+                Write-Output "DIGEST-MD5認証実行中..."
+                $writer.WriteLine("AUTH DIGEST-MD5")
+                $writer.Flush()
+                # DIGEST-MD5は複雑なため、基本的な実装のみ
+                $response = $reader.ReadLine()
+                if ($response.StartsWith("334")) {{
+                    # 簡易実装：チャレンジ応答をスキップ
+                    $writer.WriteLine("")
+                    $writer.Flush()
+                }}
+            }}
         }}
-    }} else {{
-        $LogDetails = "`n`nログファイルが見つからないか、アクセスできません。"
+        
+        $response = $reader.ReadLine()
+        if ($response.StartsWith("235")) {{
+            Write-Output "$authMethod 認証成功"
+            return $true
+        }} else {{
+            Write-Output "$authMethod 認証失敗: $response"
+            return $false
+        }}
     }}
-    
-    # メール本文を作成
-    $Body = @"
-Robocopyバックアップの実行結果をお知らせします。
 
-実行日時: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")
-結果: $Result
-コピー元: {source_path}
-コピー先: {dest_path}
-ログファイル: $LogFile$LogDetails
-"@
-
-    # セキュアな認証情報を作成
-    if ([string]::IsNullOrEmpty($SenderPassword)) {{
-        Write-Error "送信者パスワードが設定されていません"
-        exit 1
-    }}
-    
-    $SecurePassword = ConvertTo-SecureString $SenderPassword -AsPlainText -Force
-    $Credential = New-Object System.Management.Automation.PSCredential($SenderEmail, $SecurePassword)
-    
-    # メール送信パラメータ
-    $MailParams = @{{
-        SmtpServer = $SmtpServer
-        Port = $SmtpPort
-        From = $SenderEmail
-        To = $RecipientEmail
-        Subject = $Subject
-        Body = $Body
-        Credential = $Credential
-        UseSsl = $UseSSL
-        Encoding = [System.Text.Encoding]::UTF8
-    }}
-    
-    Write-Output "SMTP設定: $SmtpServer`:$SmtpPort (SSL: $UseSSL)"
-    Write-Output "送信者: $SenderEmail"
-    Write-Output "受信者: $RecipientEmail"
-    
-    # メール送信
-    Send-MailMessage @MailParams
-    Write-Output "[$(Get-Date -Format 'yyyy/MM/dd HH:mm:ss')] メール送信成功"
-    exit 0
-    
-}} catch {{
-    $ErrorMessage = $_.Exception.Message
-    Write-Error "[$(Get-Date -Format 'yyyy/MM/dd HH:mm:ss')] メール送信エラー: $ErrorMessage"
-    
-    # 詳細なエラー情報
-    if ($_.Exception.InnerException) {{
-        Write-Error "内部エラー: $($_.Exception.InnerException.Message)"
-    }}
-    
-    # SMTP接続の問題の場合の追加情報
-    if ($ErrorMessage -match "SMTP|SSL|TLS|認証") {{
-        Write-Output "SMTP設定を確認してください："
-        Write-Output "- サーバー: $SmtpServer"
-        Write-Output "- ポート: $SmtpPort"
-        Write-Output "- SSL使用: $UseSSL"
-        Write-Output "- 認証情報: 送信者メール、パスワード"
-    }}
-    
-    exit 1
-}}'''
+    try {{
+        # TCP接続
+        Write-Output "TCP接続中..."
+        $tcpClient = New-Object System.Net.Sockets.TcpClient
+        $tcpClient.Connect($SmtpServer, $SmtpPort)
+        $stream = $tcpClient.GetStream()
+        
+        # SSL/TLS処理
+        if ($UseSSL) {{
+            Write-Output "SSL/TLS暗号化中..."
+            $sslStream = New-Object System.Net.Security.SslStream($stream)
+            $sslStream.AuthenticateAsClient($SmtpServer)
+            $stream = $sslStream
+            Start-Sleep -Milliseconds 500
+        }}
+        
+        $reader = New-Object System.IO.StreamReader($stream)
+        $writer = New-Object System.IO.StreamWriter($stream)
+        
+        # 初期応答
+        $response = $reader.ReadLine()
+        Write-Output "初期応答: $response"
+        
+        # EHLO送信
+        $writer.WriteLine("EHLO localhost")
+        $writer.Flush()
+        do {{
+            $response = $reader.ReadLine()
+            Write-Output "EHLO応答: $response"
+        }} while ($response.StartsWith("250-"))
+        
+        # STARTTLS処理
+        if ($UseSTARTTLS -and -not $UseSSL) {{
+            Write-Output "STARTTLS実行中..."
+            $writer.WriteLine("STARTTLS")
+            $writer.Flush()
+            $response = $reader.ReadLine()
             
-            # PowerShellスクリプトファイルをShift_JISで作成
+            if ($response.StartsWith("220")) {{
+                $sslStream = New-Object System.Net.Security.SslStream($stream)
+                $sslStream.AuthenticateAsClient($SmtpServer)
+                $stream = $sslStream
+                $reader = New-Object System.IO.StreamReader($stream)
+                $writer = New-Object System.IO.StreamWriter($stream)
+                
+                # STARTTLS後のEHLO
+                $writer.WriteLine("EHLO localhost")
+                $writer.Flush()
+                do {{
+                    $response = $reader.ReadLine()
+                }} while ($response.StartsWith("250-"))
+            }}
+        }}
+        
+        # 認証実行
+        if (-not (Send-AuthCommand $writer $reader $AuthMethod $SenderEmail $SenderPassword)) {{
+            throw "認証失敗"
+        }}
+        
+        # メール送信
+        Write-Output "メール送信中..."
+        $writer.WriteLine("MAIL FROM:<$SenderEmail>")
+        $writer.Flush()
+        $reader.ReadLine()
+        
+        $writer.WriteLine("RCPT TO:<$RecipientEmail>")
+        $writer.Flush()
+        $reader.ReadLine()
+        
+        $writer.WriteLine("DATA")
+        $writer.Flush()
+        $reader.ReadLine()
+        
+        # メール内容
+        $writer.WriteLine("From: $SenderEmail")
+        $writer.WriteLine("To: $RecipientEmail")
+        $writer.WriteLine("Subject: {subject}")
+        $writer.WriteLine("Date: $(Get-Date -Format 'r')")
+        $writer.WriteLine("Content-Type: text/plain; charset=utf-8")
+        $writer.WriteLine("")
+        $writer.WriteLine("RCSchedulerからのフレキシブル認証テストメールです。")
+        $writer.WriteLine("")
+        $writer.WriteLine("送信日時: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')")
+        $writer.WriteLine("接続の保護: $ConnectionSecurity")
+        $writer.WriteLine("認証方式: $AuthMethod")
+        $writer.WriteLine("SMTPサーバー: $SmtpServer`:$SmtpPort")
+        $writer.WriteLine("")
+        if ("{source_path}" -and "{dest_path}") {{
+            $writer.WriteLine("バックアップ設定:")
+            $writer.WriteLine("コピー元: {source_path}")
+            $writer.WriteLine("コピー先: {dest_path}")
+            $writer.WriteLine("")
+        }}
+        $writer.WriteLine("この設定でバックアップ結果通知が送信されます。")
+        $writer.WriteLine(".")
+        $writer.Flush()
+        
+        $response = $reader.ReadLine()
+        if ($response.StartsWith("250")) {{
+            Write-Output "メール送信成功"
+        }} else {{
+            throw "メール送信失敗: $response"
+        }}
+        
+        $writer.WriteLine("QUIT")
+        $writer.Flush()
+        
+        Write-Output "=== 送信完了 ==="
+        exit 0
+        
+    }} catch {{
+        Write-Output "送信エラー: $($_.Exception.Message)"
+        exit 1
+    }} finally {{
+        if ($stream) {{ $stream.Close() }}
+        if ($tcpClient) {{ $tcpClient.Close() }}
+    }}'''
+            
+            # ファイル保存
             with open(ps_path, 'w', encoding='cp932') as f:
                 f.write(ps_content)
             
-            self.log_message(f"PowerShellスクリプトを生成しました (動的ログ対応): {ps_path}")
             return ps_path
             
         except Exception as e:
-            error_msg = f"PowerShellスクリプト生成エラー: {str(e)}"
-            self.log_message(error_msg, "error")
+            self.log_message(f"フレキシブルメールスクリプト生成エラー: {str(e)}", "error")
             raise
+
+    def toggle_email_settings(self):
+        """メール設定の有効/無効を切り替え"""
+        if self.email_enabled_var.get():
+            # メール設定を有効化
+            for widget in self.email_settings_frame.winfo_children():
+                if isinstance(widget, ttk.Frame):
+                    # フレーム内のウィジェットも有効化
+                    for child in widget.winfo_children():
+                        if hasattr(child, 'configure'):
+                            if isinstance(child, ttk.Combobox):
+                                child.configure(state='readonly')  # プルダウンは読み取り専用で有効化
+                            elif not isinstance(child, ttk.Label):
+                                child.configure(state='normal')
+                elif hasattr(widget, 'configure'):
+                    if isinstance(widget, ttk.Combobox):
+                        widget.configure(state='readonly')  # プルダウンは読み取り専用で有効化
+                    elif not isinstance(widget, ttk.Label):
+                        widget.configure(state='normal')
+        else:
+            # メール設定を無効化
+            for widget in self.email_settings_frame.winfo_children():
+                if isinstance(widget, ttk.Frame):
+                    # フレーム内のウィジェットも無効化
+                    for child in widget.winfo_children():
+                        if hasattr(child, 'configure') and not isinstance(child, ttk.Label):
+                            child.configure(state='disabled')
+                elif hasattr(widget, 'configure') and not isinstance(widget, ttk.Label):
+                    widget.configure(state='disabled')
 
 def main():
     # GUIモードでのみ実行（--scheduledオプションは不要になった）
