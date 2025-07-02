@@ -179,3 +179,4 @@ robocopy_config.json
 *.log
 *.bat
 *.ps1
+*.txt
