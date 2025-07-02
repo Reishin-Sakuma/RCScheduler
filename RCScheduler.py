@@ -1217,6 +1217,12 @@ class RobocopyScheduler:
                     for line in result.stderr.strip().split('\n'):
                         if line.strip():
                             self.log_message(f"  ERROR: {line.strip()}", "error")
+            
+            # 一時ファイルを削除
+            try:
+                os.unlink(ps_script_path)
+            except:
+                pass
                             
         except subprocess.TimeoutExpired:
             self.log_message("メール通知送信タイムアウト", "error")
@@ -1234,7 +1240,7 @@ class RobocopyScheduler:
         self.status_var.set("実行完了" if success else "実行エラー")
     
     def create_scheduled_task(self):
-        """Windowsタスクスケジューラにタスクを作成（バッチファイル版）"""
+        """Windowsタスクスケジューラにタスクを作成（フレキシブル対応版）"""
         if not self.source_var.get() or not self.dest_var.get():
             messagebox.showerror("エラー", "コピー元とコピー先を設定してください")
             return
@@ -1252,6 +1258,14 @@ class RobocopyScheduler:
             self.log_message("バッチファイルを生成中...")
             batch_path = self.generate_batch_script(task_name)
             
+            # メール送信が有効な場合、フレキシブルメールスクリプトも生成
+            generated_files = [batch_path]
+            if self.email_enabled_var.get():
+                self.log_message("メール送信スクリプトを生成中...")
+                # バッチ専用のメールスクリプトを生成
+                mail_script_path = self.generate_batch_mail_script(task_name)
+                generated_files.append(mail_script_path)
+            
             # タスクの実行時刻
             start_time = f"{self.hour_var.get()}:{self.minute_var.get()}"
             
@@ -1263,7 +1277,7 @@ class RobocopyScheduler:
                 weekday_code = self.get_weekday_code()
                 schedule_type = f"/SC WEEKLY /D {weekday_code}"
             
-            # schtasksコマンドを構築（バッチファイルを実行するように変更）
+            # schtasksコマンドを構築
             cmd = f'''schtasks /CREATE /TN "{task_name}" /TR "\\"{batch_path}\\"" {schedule_type} /ST {start_time} /F'''
             
             self.log_message("タスクスケジューラに登録中...")
@@ -1272,11 +1286,11 @@ class RobocopyScheduler:
             if result.returncode == 0:
                 self.log_message(f"タスクを作成しました: {task_name}")
                 self.log_message(f"実行ファイル: {batch_path}")
+                
+                file_list = "\n".join([f"・{os.path.basename(f)}" for f in generated_files])
                 messagebox.showinfo("成功", 
                     f"スケジュールタスク '{task_name}' を作成しました\n\n"
-                    f"生成されたファイル:\n"
-                    f"・バッチファイル: {os.path.basename(batch_path)}\n"
-                    f"{'・PowerShellスクリプト: ' + os.path.basename(self.generate_powershell_mail_script()) if self.email_enabled_var.get() else ''}")
+                    f"生成されたファイル:\n{file_list}")
                 self.update_task_status()
             else:
                 error_msg = f"タスク作成エラー: {result.stderr}"
@@ -1741,13 +1755,24 @@ class RobocopyScheduler:
             "",
         ])
         
-        # メール送信（設定されている場合）
+        # メール送信（フレキシブル対応）
         if self.email_enabled_var.get():
+            # 実行時にフレキシブルメールスクリプトを生成
+            ps_script_name = f"{self.task_name_var.get()}_batch_mail.ps1"
+            
             batch_lines.extend([
-                ":: メール送信",
+                ":: メール送信（フレキシブル認証）",
                 "echo [%date% %time%] メール送信中... >> %LOG_FILE%",
-                ":: PowerShellスクリプトにログファイル名を渡して実行",
-                f"powershell -ExecutionPolicy Bypass -File \"{self.generate_powershell_mail_script()}\" !BACKUP_SUCCESS! %LOG_FILE% >> %LOG_FILE% 2>&1",
+                "",
+                ":: バックアップ結果によるメール送信",
+                "if !BACKUP_SUCCESS! equ 1 (",
+                "    set MAIL_MESSAGE=バックアップが正常に完了しました",
+                ") else (",
+                "    set MAIL_MESSAGE=バックアップでエラーが発生しました",
+                ")",
+                "",
+                f":: PowerShellスクリプトでメール送信（{ps_script_name}は事前生成済み）",
+                f"powershell -ExecutionPolicy Bypass -File \"{ps_script_name}\" !BACKUP_SUCCESS! %LOG_FILE% >> %LOG_FILE% 2>&1",
                 "if !errorlevel! neq 0 (",
                 "    echo [%date% %time%] WARNING: メール送信に失敗 >> %LOG_FILE%",
                 ") else (",
@@ -2048,7 +2073,7 @@ class RobocopyScheduler:
             messagebox.showerror("エラー", error_msg)
 
     def generate_flexible_mail_script(self, success, message):
-        """フレキシブル認証用メールスクリプトを生成"""
+        """フレキシブル認証用メールスクリプトを生成（実運用・テスト両対応）"""
         try:
             ps_filename = f"{self.task_name_var.get()}_flexible_mail.ps1"
             ps_path = os.path.abspath(ps_filename)
@@ -2070,8 +2095,16 @@ class RobocopyScheduler:
             source_path = self.escape_powershell_string(self.source_var.get())
             dest_path = self.escape_powershell_string(self.dest_var.get())
             
-            # メール件名
-            subject = "RCScheduler テストメール - " + ("成功" if success else "失敗")
+            # メール件名（テスト用か実運用用かを判定）
+            if message == "テストメール送信":
+                subject = "RCScheduler テストメール - フレキシブル認証"
+                is_test = True
+            else:
+                subject = "Robocopyバックアップ結果 - " + ("成功" if success else "失敗")
+                is_test = False
+            
+            # エスケープされたメッセージ
+            escaped_message = self.escape_powershell_string(message)
             
             # フレキシブル認証PowerShellスクリプト
             ps_content = f'''# RCScheduler フレキシブル認証メール送信
@@ -2087,10 +2120,13 @@ class RobocopyScheduler:
     $UseSTARTTLS = {"$true" if use_starttls else "$false"}
     $AuthMethod = "{auth_method}"
     $ConnectionSecurity = "{connection_security}"
+    $IsTest = {"$true" if is_test else "$false"}
 
-    Write-Output "=== フレキシブル認証メール送信 ==="
-    Write-Output "接続の保護: $ConnectionSecurity"
-    Write-Output "認証方式: $AuthMethod"
+    if ($IsTest) {{
+        Write-Output "=== フレキシブル認証テストメール送信 ==="
+    }} else {{
+        Write-Output "=== バックアップ結果メール送信 ==="
+    }}
 
     function ConvertTo-Base64($text) {{
         $bytes = [System.Text.Encoding]::UTF8.GetBytes($text)
@@ -2100,7 +2136,7 @@ class RobocopyScheduler:
     function Send-AuthCommand($writer, $reader, $authMethod, $username, $password) {{
         switch ($authMethod) {{
             "CRAM-MD5" {{
-                Write-Output "CRAM-MD5認証実行中..."
+                if ($IsTest) {{ Write-Output "CRAM-MD5認証実行中..." }}
                 $writer.WriteLine("AUTH CRAM-MD5")
                 $writer.Flush()
                 $response = $reader.ReadLine()
@@ -2122,7 +2158,7 @@ class RobocopyScheduler:
                 }}
             }}
             "LOGIN" {{
-                Write-Output "LOGIN認証実行中..."
+                if ($IsTest) {{ Write-Output "LOGIN認証実行中..." }}
                 $writer.WriteLine("AUTH LOGIN")
                 $writer.Flush()
                 $response = $reader.ReadLine()
@@ -2137,19 +2173,17 @@ class RobocopyScheduler:
                 }}
             }}
             "PLAIN" {{
-                Write-Output "PLAIN認証実行中..."
+                if ($IsTest) {{ Write-Output "PLAIN認証実行中..." }}
                 $authString = ConvertTo-Base64("`0$username`0$password")
                 $writer.WriteLine("AUTH PLAIN $authString")
                 $writer.Flush()
             }}
             "DIGEST-MD5" {{
-                Write-Output "DIGEST-MD5認証実行中..."
+                if ($IsTest) {{ Write-Output "DIGEST-MD5認証実行中..." }}
                 $writer.WriteLine("AUTH DIGEST-MD5")
                 $writer.Flush()
-                # DIGEST-MD5は複雑なため、基本的な実装のみ
                 $response = $reader.ReadLine()
                 if ($response.StartsWith("334")) {{
-                    # 簡易実装：チャレンジ応答をスキップ
                     $writer.WriteLine("")
                     $writer.Flush()
                 }}
@@ -2158,24 +2192,24 @@ class RobocopyScheduler:
         
         $response = $reader.ReadLine()
         if ($response.StartsWith("235")) {{
-            Write-Output "$authMethod 認証成功"
+            if ($IsTest) {{ Write-Output "$authMethod 認証成功" }}
             return $true
         }} else {{
-            Write-Output "$authMethod 認証失敗: $response"
+            if ($IsTest) {{ Write-Output "$authMethod 認証失敗: $response" }}
             return $false
         }}
     }}
 
     try {{
         # TCP接続
-        Write-Output "TCP接続中..."
+        if ($IsTest) {{ Write-Output "TCP接続中..." }}
         $tcpClient = New-Object System.Net.Sockets.TcpClient
         $tcpClient.Connect($SmtpServer, $SmtpPort)
         $stream = $tcpClient.GetStream()
         
         # SSL/TLS処理
         if ($UseSSL) {{
-            Write-Output "SSL/TLS暗号化中..."
+            if ($IsTest) {{ Write-Output "SSL/TLS暗号化中..." }}
             $sslStream = New-Object System.Net.Security.SslStream($stream)
             $sslStream.AuthenticateAsClient($SmtpServer)
             $stream = $sslStream
@@ -2187,19 +2221,19 @@ class RobocopyScheduler:
         
         # 初期応答
         $response = $reader.ReadLine()
-        Write-Output "初期応答: $response"
+        if ($IsTest) {{ Write-Output "初期応答: $response" }}
         
         # EHLO送信
         $writer.WriteLine("EHLO localhost")
         $writer.Flush()
         do {{
             $response = $reader.ReadLine()
-            Write-Output "EHLO応答: $response"
+            if ($IsTest) {{ Write-Output "EHLO応答: $response" }}
         }} while ($response.StartsWith("250-"))
         
         # STARTTLS処理
         if ($UseSTARTTLS -and -not $UseSSL) {{
-            Write-Output "STARTTLS実行中..."
+            if ($IsTest) {{ Write-Output "STARTTLS実行中..." }}
             $writer.WriteLine("STARTTLS")
             $writer.Flush()
             $response = $reader.ReadLine()
@@ -2226,7 +2260,7 @@ class RobocopyScheduler:
         }}
         
         # メール送信
-        Write-Output "メール送信中..."
+        if ($IsTest) {{ Write-Output "メール送信中..." }}
         $writer.WriteLine("MAIL FROM:<$SenderEmail>")
         $writer.Flush()
         $reader.ReadLine()
@@ -2246,26 +2280,39 @@ class RobocopyScheduler:
         $writer.WriteLine("Date: $(Get-Date -Format 'r')")
         $writer.WriteLine("Content-Type: text/plain; charset=utf-8")
         $writer.WriteLine("")
-        $writer.WriteLine("RCSchedulerからのフレキシブル認証テストメールです。")
-        $writer.WriteLine("")
-        $writer.WriteLine("送信日時: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')")
-        $writer.WriteLine("接続の保護: $ConnectionSecurity")
-        $writer.WriteLine("認証方式: $AuthMethod")
-        $writer.WriteLine("SMTPサーバー: $SmtpServer`:$SmtpPort")
-        $writer.WriteLine("")
-        if ("{source_path}" -and "{dest_path}") {{
-            $writer.WriteLine("バックアップ設定:")
+        
+        if ($IsTest) {{
+            $writer.WriteLine("RCSchedulerからのフレキシブル認証テストメールです。")
+            $writer.WriteLine("")
+            $writer.WriteLine("送信日時: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')")
+            $writer.WriteLine("接続の保護: $ConnectionSecurity")
+            $writer.WriteLine("認証方式: $AuthMethod")
+            $writer.WriteLine("SMTPサーバー: $SmtpServer`:$SmtpPort")
+            $writer.WriteLine("")
+            if ("{source_path}" -and "{dest_path}") {{
+                $writer.WriteLine("バックアップ設定:")
+                $writer.WriteLine("コピー元: {source_path}")
+                $writer.WriteLine("コピー先: {dest_path}")
+                $writer.WriteLine("")
+            }}
+            $writer.WriteLine("この設定でバックアップ結果通知が送信されます。")
+        }} else {{
+            $writer.WriteLine("Robocopyバックアップの実行結果をお知らせします。")
+            $writer.WriteLine("")
+            $writer.WriteLine("実行日時: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')")
+            $writer.WriteLine("結果: {'成功' if success else '失敗'}")
             $writer.WriteLine("コピー元: {source_path}")
             $writer.WriteLine("コピー先: {dest_path}")
             $writer.WriteLine("")
+            $writer.WriteLine("詳細:")
+            $writer.WriteLine("{escaped_message}")
         }}
-        $writer.WriteLine("この設定でバックアップ結果通知が送信されます。")
         $writer.WriteLine(".")
         $writer.Flush()
         
         $response = $reader.ReadLine()
         if ($response.StartsWith("250")) {{
-            Write-Output "メール送信成功"
+            if ($IsTest) {{ Write-Output "メール送信成功" }} else {{ Write-Output "バックアップ結果メール送信完了" }}
         }} else {{
             throw "メール送信失敗: $response"
         }}
@@ -2293,6 +2340,508 @@ class RobocopyScheduler:
         except Exception as e:
             self.log_message(f"フレキシブルメールスクリプト生成エラー: {str(e)}", "error")
             raise
+
+    def generate_batch_mail_script(self, task_name):
+        """バッチ実行用のメールスクリプトを生成"""
+        try:
+            ps_filename = f"{task_name}_batch_mail.ps1"
+            ps_path = os.path.abspath(ps_filename)
+            
+            # 設定値を準備
+            smtp_server = self.escape_powershell_string(self.smtp_server_var.get().strip())
+            smtp_port = self.smtp_port_var.get().strip()
+            sender_email = self.escape_powershell_string(self.sender_email_var.get().strip())
+            sender_password = self.escape_powershell_string(self.sender_password_var.get().strip())
+            recipient_email = self.escape_powershell_string(self.recipient_email_var.get().strip())
+            
+            # 接続・認証設定
+            connection_security = self.connection_security_var.get()
+            auth_method = self.auth_method_var.get()
+            use_ssl = connection_security == "SSL/TLS"
+            use_starttls = connection_security == "STARTTLS"
+            
+            # パス情報
+            source_path = self.escape_powershell_string(self.source_var.get())
+            dest_path = self.escape_powershell_string(self.dest_var.get())
+            
+            # バッチ実行用PowerShellスクリプト（引数対応版）
+            ps_content = f'''# RCScheduler バッチ実行用メール送信
+    param(
+        [string]$BackupSuccess = "0",
+        [string]$LogFilePath = ""
+    )
+
+    $ErrorActionPreference = "Stop"
+
+    # 設定
+    $SmtpServer = "{smtp_server}"
+    $SmtpPort = {smtp_port}
+    $SenderEmail = "{sender_email}"
+    $SenderPassword = "{sender_password}"
+    $RecipientEmail = "{recipient_email}"
+    $UseSSL = {"$true" if use_ssl else "$false"}
+    $UseSTARTTLS = {"$true" if use_starttls else "$false"}
+    $AuthMethod = "{auth_method}"
+
+    # 件名設定
+    if ($BackupSuccess -eq "1") {{
+        $Subject = "Robocopyバックアップ結果 - 成功"
+        $Result = "成功"
+    }} else {{
+        $Subject = "Robocopyバックアップ結果 - 失敗"
+        $Result = "失敗"
+    }}
+
+    function ConvertTo-Base64($text) {{
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes($text)
+        return [System.Convert]::ToBase64String($bytes)
+    }}
+
+    function Send-AuthCommand($writer, $reader, $authMethod, $username, $password) {{
+        switch ($authMethod) {{
+            "CRAM-MD5" {{
+                $writer.WriteLine("AUTH CRAM-MD5")
+                $writer.Flush()
+                $response = $reader.ReadLine()
+                
+                if ($response.StartsWith("334")) {{
+                    $challenge = $response.Substring(4)
+                    $challengeBytes = [System.Convert]::FromBase64String($challenge)
+                    $challengeText = [System.Text.Encoding]::UTF8.GetString($challengeBytes)
+                    
+                    $hmac = New-Object System.Security.Cryptography.HMACMD5
+                    $hmac.Key = [System.Text.Encoding]::UTF8.GetBytes($password)
+                    $hash = $hmac.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($challengeText))
+                    $hashHex = [System.BitConverter]::ToString($hash) -replace "-", ""
+                    
+                    $cramResponse = "$username " + $hashHex.ToLower()
+                    $encodedResponse = ConvertTo-Base64 $cramResponse
+                    $writer.WriteLine($encodedResponse)
+                    $writer.Flush()
+                }}
+            }}
+            "LOGIN" {{
+                $writer.WriteLine("AUTH LOGIN")
+                $writer.Flush()
+                $response = $reader.ReadLine()
+                if ($response.StartsWith("334")) {{
+                    $writer.WriteLine((ConvertTo-Base64 $username))
+                    $writer.Flush()
+                    $response = $reader.ReadLine()
+                    if ($response.StartsWith("334")) {{
+                        $writer.WriteLine((ConvertTo-Base64 $password))
+                        $writer.Flush()
+                    }}
+                }}
+            }}
+            "PLAIN" {{
+                $authString = ConvertTo-Base64("`0$username`0$password")
+                $writer.WriteLine("AUTH PLAIN $authString")
+                $writer.Flush()
+            }}
+        }}
+        
+        $response = $reader.ReadLine()
+        return $response.StartsWith("235")
+    }}
+
+    try {{
+        # 接続
+        $tcpClient = New-Object System.Net.Sockets.TcpClient
+        $tcpClient.Connect($SmtpServer, $SmtpPort)
+        $stream = $tcpClient.GetStream()
+        
+        # SSL/STARTTLS処理
+        if ($UseSSL) {{
+            $sslStream = New-Object System.Net.Security.SslStream($stream)
+            $sslStream.AuthenticateAsClient($SmtpServer)
+            $stream = $sslStream
+            Start-Sleep -Milliseconds 500
+        }}
+        
+        $reader = New-Object System.IO.StreamReader($stream)
+        $writer = New-Object System.IO.StreamWriter($stream)
+        
+        # SMTP通信
+        $response = $reader.ReadLine()  # 220応答
+        
+        $writer.WriteLine("EHLO localhost")
+        $writer.Flush()
+        do {{ $response = $reader.ReadLine() }} while ($response.StartsWith("250-"))
+        
+        if ($UseSTARTTLS -and -not $UseSSL) {{
+            $writer.WriteLine("STARTTLS")
+            $writer.Flush()
+            $response = $reader.ReadLine()
+            if ($response.StartsWith("220")) {{
+                $sslStream = New-Object System.Net.Security.SslStream($stream)
+                $sslStream.AuthenticateAsClient($SmtpServer)
+                $stream = $sslStream
+                $reader = New-Object System.IO.StreamReader($stream)
+                $writer = New-Object System.IO.StreamWriter($stream)
+                
+                $writer.WriteLine("EHLO localhost")
+                $writer.Flush()
+                do {{ $response = $reader.ReadLine() }} while ($response.StartsWith("250-"))
+            }}
+        }}
+        
+        # 認証
+        if (-not (Send-AuthCommand $writer $reader $AuthMethod $SenderEmail $SenderPassword)) {{
+            throw "認証失敗"
+        }}
+        
+        # メール送信
+        $writer.WriteLine("MAIL FROM:<$SenderEmail>")
+        $writer.Flush()
+        $reader.ReadLine()
+        
+        $writer.WriteLine("RCPT TO:<$RecipientEmail>")
+        $writer.Flush()
+        $reader.ReadLine()
+        
+        $writer.WriteLine("DATA")
+        $writer.Flush()
+        $reader.ReadLine()
+        
+        # メール内容
+        $writer.WriteLine("From: $SenderEmail")
+        $writer.WriteLine("To: $RecipientEmail")
+        $writer.WriteLine("Subject: $Subject")
+        $writer.WriteLine("Date: $(Get-Date -Format 'r')")
+        $writer.WriteLine("Content-Type: text/plain; charset=utf-8")
+        $writer.WriteLine("")
+        $writer.WriteLine("Robocopyバックアップの実行結果をお知らせします。")
+        $writer.WriteLine("")
+        $writer.WriteLine("実行日時: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')")
+        $writer.WriteLine("結果: $Result")
+        $writer.WriteLine("コピー元: {source_path}")
+        $writer.WriteLine("コピー先: {dest_path}")
+        $writer.WriteLine("")
+        if ($LogFilePath -and (Test-Path $LogFilePath)) {{
+            $writer.WriteLine("ログファイル: $LogFilePath")
+            $writer.WriteLine("")
+            $writer.WriteLine("=== ログ内容（最新20行） ===")
+            $logLines = Get-Content $LogFilePath -Tail 20 -ErrorAction SilentlyContinue
+            if ($logLines) {{
+                foreach ($line in $logLines) {{
+                    $writer.WriteLine($line)
+                }}
+            }}
+        }}
+        $writer.WriteLine(".")
+        $writer.Flush()
+        
+        $response = $reader.ReadLine()
+        if (-not $response.StartsWith("250")) {{
+            throw "送信失敗: $response"
+        }}
+        
+        $writer.WriteLine("QUIT")
+        $writer.Flush()
+        
+        Write-Output "メール送信完了"
+        exit 0
+        
+    }} catch {{
+        Write-Output "メール送信エラー: $($_.Exception.Message)"
+        exit 1
+    }} finally {{
+        if ($stream) {{ $stream.Close() }}
+        if ($tcpClient) {{ $tcpClient.Close() }}
+    }}'''
+            
+            # ファイル保存
+            with open(ps_path, 'w', encoding='cp932') as f:
+                f.write(ps_content)
+            
+            self.log_message(f"バッチ用メールスクリプトを生成しました: {ps_path}")
+            return ps_path
+            
+        except Exception as e:
+            self.log_message(f"バッチ用メールスクリプト生成エラー: {str(e)}", "error")
+            raise
+
+    def generate_batch_script(self, task_name):
+        """タスクスケジューラ用のバッチファイルを生成（フレキシブル対応版）"""
+        try:
+            batch_filename = f"{task_name}.bat"
+            batch_path = os.path.abspath(batch_filename)
+            
+            # バッチファイルの内容を構築
+            batch_content = self.build_batch_content()
+            
+            # バッチファイルをSJIS(CP932)で作成
+            with open(batch_path, 'w', encoding='cp932') as f:
+                f.write(batch_content)
+            
+            self.log_message(f"バッチファイルを生成しました (SJIS): {batch_path}")
+            return batch_path
+            
+        except Exception as e:
+            error_msg = f"バッチファイル生成エラー: {str(e)}"
+            self.log_message(error_msg, "error")
+            raise
+
+    def build_batch_content(self):
+        """バッチファイルの内容を構築（フレキシブルメール対応版）"""
+        source = self.source_var.get()
+        dest = self.dest_var.get()
+        options = self.build_robocopy_options()  # ログオプションなしのバージョンを使用
+        
+        # ベースログファイルのパス（拡張子なし）
+        base_log_file = self.log_file_var.get() if self.log_file_var.get() else "robocopy_schedule_log"
+        if base_log_file.endswith('.txt'):
+            base_log_file = base_log_file[:-4]  # .txt を除去
+        base_log_file = os.path.abspath(base_log_file)
+        
+        batch_lines = [
+            "@echo off",
+            "chcp 932 >nul",  # SJIS(CP932)に設定してログファイルの文字化けを防ぐ
+            "setlocal enabledelayedexpansion",
+            "",
+            ":: ===========================================",
+            ":: Robocopy自動バックアップスクリプト",
+            f":: 生成日時: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            ":: ===========================================",
+            "",
+            "set ERROR_OCCURRED=0",
+            "",
+            ":: 実行毎に一意なログファイル名を生成",
+            "for /f \"tokens=1-3 delims=/ \" %%a in (\"%date%\") do (",
+            "    set DATE_PART=%%c%%b%%a",
+            ")",
+            "for /f \"tokens=1-3 delims=:. \" %%a in (\"%time%\") do (",
+            "    set TIME_PART=%%a%%b%%c",
+            ")",
+            ":: 時刻の先頭スペースを0に置換",
+            "set TIME_PART=%TIME_PART: =0%",
+            "",
+            f"set LOG_FILE=\"{base_log_file}_%DATE_PART%_%TIME_PART%.txt\"",
+            "set TEMP_LOG=\"" + os.path.dirname(base_log_file) + "\\robocopy_temp_%DATE_PART%_%TIME_PART%.log\"",
+            "",
+            ":: ログファイルにヘッダーを出力",
+            "echo =========================================== > %LOG_FILE%",
+            "echo Robocopy自動バックアップ実行ログ >> %LOG_FILE%",
+            "echo 実行開始: %date% %time% >> %LOG_FILE%",
+            "echo =========================================== >> %LOG_FILE%",
+            f"echo コピー元: {source} >> %LOG_FILE%",
+            f"echo コピー先: {dest} >> %LOG_FILE%",
+            "echo. >> %LOG_FILE%",
+            "",
+        ]
+        
+        # ネットワーク認証（コピー元）
+        if self.is_network_path(source) and self.source_username_var.get():
+            server_path = "\\\\" + source.split("\\")[2]
+            username = self.escape_batch_string(self.source_username_var.get())
+            password = self.escape_batch_password(self.source_password_var.get())
+            domain = self.escape_batch_string(self.source_domain_var.get())
+            
+            if domain:
+                user_part = f"{domain}\\{username}"
+            else:
+                user_part = username
+                
+            batch_lines.extend([
+                ":: コピー元ネットワーク認証",
+                "echo [%date% %time%] コピー元ネットワーク認証中... >> %LOG_FILE%",
+                f"echo コピー元サーバー: {server_path} >> %LOG_FILE%",
+                f"echo ユーザー: {user_part} >> %LOG_FILE%",
+                "",
+                ":: 既存の接続を切断",
+                f"net use \"{server_path}\" /delete /y >nul 2>&1",
+                "",
+                ":: 新しい接続を確立",
+                f"net use \"{server_path}\" {password} /user:\"{user_part}\" /persistent:no",
+                "if !errorlevel! neq 0 (",
+                "    echo [%date% %time%] ERROR: コピー元ネットワーク認証に失敗 ^(エラーコード: !errorlevel!^) >> %LOG_FILE%",
+                "    echo 詳細: net use コマンドが失敗しました >> %LOG_FILE%",
+                "    set ERROR_OCCURRED=1",
+                "    goto :CLEANUP",
+                ")",
+                "echo [%date% %time%] コピー元ネットワーク認証成功 >> %LOG_FILE%",
+                "",
+            ])
+        
+        # ネットワーク認証（コピー先）
+        if self.is_network_path(dest) and self.dest_username_var.get():
+            server_path = "\\\\" + dest.split("\\")[2]
+            username = self.escape_batch_string(self.dest_username_var.get())
+            password = self.escape_batch_password(self.dest_password_var.get())
+            domain = self.escape_batch_string(self.dest_domain_var.get())
+            
+            if domain:
+                user_part = f"{domain}\\{username}"
+            else:
+                user_part = username
+                
+            # コピー元と同じサーバーかチェック
+            source_server = ""
+            if self.is_network_path(source):
+                source_server = "\\\\" + source.split("\\")[2]
+            
+            if server_path != source_server:  # 異なるサーバーの場合のみ認証
+                batch_lines.extend([
+                    ":: コピー先ネットワーク認証",
+                    "echo [%date% %time%] コピー先ネットワーク認証中... >> %LOG_FILE%",
+                    f"echo コピー先サーバー: {server_path} >> %LOG_FILE%",
+                    f"echo ユーザー: {user_part} >> %LOG_FILE%",
+                    "",
+                    ":: 既存の接続を切断",
+                    f"net use \"{server_path}\" /delete /y >nul 2>&1",
+                    "",
+                    ":: 新しい接続を確立",
+                    f"net use \"{server_path}\" {password} /user:\"{user_part}\" /persistent:no",
+                    "if !errorlevel! neq 0 (",
+                    "    echo [%date% %time%] ERROR: コピー先ネットワーク認証に失敗 ^(エラーコード: !errorlevel!^) >> %LOG_FILE%",
+                    "    echo 詳細: net use コマンドが失敗しました >> %LOG_FILE%",
+                    "    set ERROR_OCCURRED=1",
+                    "    goto :CLEANUP",
+                    ")",
+                    "echo [%date% %time%] コピー先ネットワーク認証成功 >> %LOG_FILE%",
+                    "",
+                ])
+            else:
+                batch_lines.extend([
+                    "echo [%date% %time%] コピー先は同じサーバーのため認証をスキップ >> %LOG_FILE%",
+                    "",
+                ])
+        
+        # 接続確認とRobocopy実行
+        batch_lines.extend([
+            ":: フォルダアクセス確認",
+            "echo [%date% %time%] フォルダアクセス確認中... >> %LOG_FILE%",
+            "",
+            ":: コピー元フォルダの確認",
+            f"if not exist \"{source}\" (",
+            f"    echo [%date% %time%] ERROR: コピー元フォルダにアクセスできません: {source} >> %LOG_FILE%",
+            "    set ERROR_OCCURRED=1",
+            "    goto :CLEANUP",
+            ")",
+            "echo [%date% %time%] コピー元フォルダアクセス確認OK >> %LOG_FILE%",
+            "",
+            ":: コピー先フォルダの確認（存在しない場合は作成を試行）",
+            f"if not exist \"{dest}\" (",
+            f"    echo [%date% %time%] コピー先フォルダが存在しないため作成を試行: {dest} >> %LOG_FILE%",
+            f"    mkdir \"{dest}\" 2>>%LOG_FILE%",
+            "    if !errorlevel! neq 0 (",
+            f"        echo [%date% %time%] ERROR: コピー先フォルダを作成できません: {dest} >> %LOG_FILE%",
+            "        set ERROR_OCCURRED=1",
+            "        goto :CLEANUP",
+            "    )",
+            ")",
+            "echo [%date% %time%] コピー先フォルダアクセス確認OK >> %LOG_FILE%",
+            "",
+            ":: Robocopy実行",
+            "echo [%date% %time%] Robocopy実行開始 >> %LOG_FILE%",
+            f"echo コマンド: robocopy \"{source}\" \"{dest}\" {options} >> %LOG_FILE%",
+            "echo ---------------------------------------- >> %LOG_FILE%",
+            "",
+            ":: 既存の一時ログファイルを削除",
+            "if exist %TEMP_LOG% del %TEMP_LOG%",
+            "",
+            ":: robocopyを実行（一時ログファイルに出力）",
+            f"robocopy \"{source}\" \"{dest}\" {options} > %TEMP_LOG% 2>&1",
+            "set ROBOCOPY_EXIT_CODE=!errorlevel!",
+            "",
+            ":: robocopyの出力をメインログファイルに統合",
+            "if exist %TEMP_LOG% (",
+            "    type %TEMP_LOG% >> %LOG_FILE%",
+            "    del %TEMP_LOG%",
+            ") else (",
+            "    echo robocopyの出力ファイルが見つかりません >> %LOG_FILE%",
+            ")",
+            "",
+            "echo ---------------------------------------- >> %LOG_FILE%",
+            "",
+            ":: Robocopy結果判定（0-7は正常、8以上はエラー）",
+            "if !ROBOCOPY_EXIT_CODE! LSS 8 (",
+            "    echo [%date% %time%] Robocopy実行成功 ^(戻り値: !ROBOCOPY_EXIT_CODE!^) >> %LOG_FILE%",
+            "    set BACKUP_SUCCESS=1",
+            ") else (",
+            "    echo [%date% %time%] Robocopy実行失敗 ^(戻り値: !ROBOCOPY_EXIT_CODE!^) >> %LOG_FILE%",
+            "    set BACKUP_SUCCESS=0",
+            "    set ERROR_OCCURRED=1",
+            ")",
+            "",
+        ])
+        
+        # メール送信（フレキシブル対応）
+        if self.email_enabled_var.get():
+            batch_lines.extend([
+                ":: メール送信（フレキシブル認証）",
+                "echo [%date% %time%] メール送信中... >> %LOG_FILE%",
+                ":: PowerShellスクリプトにログファイル名を渡して実行",
+                f"powershell -ExecutionPolicy Bypass -File \"{self.generate_flexible_mail_script_name()}\" !BACKUP_SUCCESS! %LOG_FILE% >> %LOG_FILE% 2>&1",
+                "if !errorlevel! neq 0 (",
+                "    echo [%date% %time%] WARNING: メール送信に失敗 >> %LOG_FILE%",
+                ") else (",
+                "    echo [%date% %time%] メール送信完了 >> %LOG_FILE%",
+                ")",
+                "",
+            ])
+        
+        # クリーンアップ
+        cleanup_lines = [
+            ":CLEANUP",
+            ":: クリーンアップ開始",
+            "echo [%date% %time%] クリーンアップ開始 >> %LOG_FILE%",
+            "",
+            ":: 一時ファイルの削除",
+            "if exist %TEMP_LOG% (",
+            "    del %TEMP_LOG%",
+            "    echo [%date% %time%] 一時ログファイルを削除 >> %LOG_FILE%",
+            ")",
+            "",
+            ":: ネットワーク接続切断",
+        ]
+        
+        # コピー元のネットワーク切断
+        if self.is_network_path(source) and self.source_username_var.get():
+            server_path = "\\\\" + source.split("\\")[2]
+            cleanup_lines.extend([
+                f"net use \"{server_path}\" /delete /y >nul 2>&1",
+                f"echo [%date% %time%] コピー元ネットワーク接続切断: {server_path} >> %LOG_FILE%",
+            ])
+        
+        # コピー先のネットワーク切断
+        if self.is_network_path(dest) and self.dest_username_var.get():
+            server_path = "\\\\" + dest.split("\\")[2]
+            # 同じサーバーでない場合のみ切断
+            source_server = "\\\\" + source.split("\\")[2] if self.is_network_path(source) else ""
+            if server_path != source_server:
+                cleanup_lines.extend([
+                    f"net use \"{server_path}\" /delete /y >nul 2>&1",
+                    f"echo [%date% %time%] コピー先ネットワーク接続切断: {server_path} >> %LOG_FILE%",
+                ])
+        
+        cleanup_lines.extend([
+            "",
+            ":: 実行結果サマリー",
+            "echo =========================================== >> %LOG_FILE%",
+            "if %ERROR_OCCURRED% equ 0 (",
+            "    echo [%date% %time%] バックアップ正常完了 >> %LOG_FILE%",
+            "    echo バックアップが正常に完了しました。",
+            "    echo ログファイル: %LOG_FILE%",
+            ") else (",
+            "    echo [%date% %time%] バックアップ異常終了 >> %LOG_FILE%",
+            "    echo バックアップ中にエラーが発生しました。",
+            "    echo ログファイルを確認してください: %LOG_FILE%",
+            ")",
+            "echo 実行終了: %date% %time% >> %LOG_FILE%",
+            "echo =========================================== >> %LOG_FILE%",
+            "",
+            "exit /b %ERROR_OCCURRED%"
+        ])
+        
+        batch_lines.extend(cleanup_lines)
+        
+        return "\n".join(batch_lines)
+
+    def generate_flexible_mail_script_name(self):
+        """フレキシブルメールスクリプトのファイル名を取得"""
+        return f"{self.task_name_var.get()}_flexible_mail.ps1"
 
     def toggle_email_settings(self):
         """メール設定の有効/無効を切り替え"""
