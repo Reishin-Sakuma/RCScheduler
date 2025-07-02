@@ -1445,7 +1445,7 @@ class RobocopyScheduler:
             messagebox.showerror("エラー", error_msg)
 
     def load_config(self):
-        """設定をファイルから読み込み"""
+        """設定をファイルから読み込み（新旧設定互換版）"""
         if not os.path.exists(self.config_file):
             return
         
@@ -1453,21 +1453,20 @@ class RobocopyScheduler:
             with open(self.config_file, 'r', encoding='utf-8') as f:
                 config = json.load(f)
             
+            # 基本設定の読み込み
             self.source_var.set(config.get('source', ''))
             self.dest_var.set(config.get('dest', ''))
             
-            # タスク名の読み込み（デフォルト値を設定）
+            # タスク名の読み込み
             saved_task_name = config.get('task_name', '')
             if saved_task_name:
                 self.task_name_var.set(saved_task_name)
             else:
-                # 保存されたタスク名がない場合は自動生成
                 self.update_task_name_from_dest()
             
             # コピーモードの読み込み
             self.copy_mode_var.set(config.get('copy_mode', 'MIR'))
             
-            # 以下は既存のコードと同じ...
             # オプション設定の読み込み
             robocopy_options = config.get('robocopy_options', {})
             for var_name, var in self.option_vars.items():
@@ -1478,8 +1477,7 @@ class RobocopyScheduler:
             self.log_file_var.set(config.get('log_file', 'robocopy_log.txt'))
             self.custom_options_var.set(config.get('custom_options', ''))
             
-            # 既存の設定読み込み（変更なし）
-            # スケジュール設定の読み込み（内部コードから表示文字列に変換）
+            # スケジュール設定の読み込み
             frequency_code = config.get('frequency', 'DAILY')
             weekday_code = config.get('weekday', 'MON')
             
@@ -1493,16 +1491,44 @@ class RobocopyScheduler:
             self.weekday_var.set(weekday_display_map.get(weekday_code, "月曜日"))
             self.hour_var.set(config.get('hour', '09'))
             self.minute_var.set(config.get('minute', '00'))
+            
+            # メール設定の読み込み（新旧互換性対応）
             self.email_enabled_var.set(config.get('email_enabled', False))
             self.smtp_server_var.set(config.get('smtp_server', 'smtp.gmail.com'))
             self.smtp_port_var.set(config.get('smtp_port', '587'))
             self.sender_email_var.set(config.get('sender_email', ''))
             self.sender_password_var.set(config.get('sender_password', ''))
             self.recipient_email_var.set(config.get('recipient_email', ''))
+            
+            # 新しい設定（接続の保護・認証方式）の読み込み
+            if 'connection_security' in config:
+                # 新しい設定ファイルの場合
+                self.connection_security_var.set(config.get('connection_security', 'STARTTLS'))
+                self.auth_method_var.set(config.get('auth_method', 'CRAM-MD5'))
+            else:
+                # 古い設定ファイルの場合は変換
+                old_use_ssl = config.get('use_ssl', False)
+                old_smtp_port = config.get('smtp_port', '587')
+                
+                # 古いSSL設定を新しい接続の保護設定に変換
+                if old_use_ssl:
+                    if old_smtp_port == '465':
+                        self.connection_security_var.set('SSL/TLS')
+                    else:
+                        self.connection_security_var.set('SSL/TLS')  # 明示的にSSLが有効だった場合
+                else:
+                    if old_smtp_port == '587':
+                        self.connection_security_var.set('STARTTLS')  # ポート587の一般的な設定
+                    else:
+                        self.connection_security_var.set('暗号化なし')
+                
+                # 認証方式はデフォルトをCRAM-MD5に設定
+                self.auth_method_var.set('CRAM-MD5')
+                
+                self.log_message("古い設定ファイルを新しい形式に変換しました")
+            
+            # タスク履歴設定
             self.history_enabled_var.set(config.get('history_enabled', False))
-            self.use_ssl_var.set(config.get('use_ssl', False))
-            self.connection_security_var.set(config.get('connection_security', 'STARTTLS'))
-            self.auth_method_var.set(config.get('auth_method', 'CRAM-MD5'))
             
             # 認証情報の読み込み
             self.source_auth_enabled_var.set(config.get('source_auth_enabled', False))
@@ -1514,36 +1540,19 @@ class RobocopyScheduler:
             self.dest_password_var.set(config.get('dest_password', ''))
             self.dest_domain_var.set(config.get('dest_domain', ''))
             
+            # UI状態の更新
             self.toggle_email_settings()
-            # 認証設定の状態を更新
             self.update_auth_state()
-            # 曜日選択の状態を更新
             self.update_weekday_state()
+            
             self.log_message("設定を読み込みました")
             
         except Exception as e:
-            self.log_message(f"設定読み込みエラー: {str(e)}" , "error")
-
-    def generate_batch_script(self, task_name):
-        """タスクスケジューラ用のバッチファイルを生成（SJIS対応）"""
-        try:
-            batch_filename = f"{task_name}.bat"
-            batch_path = os.path.abspath(batch_filename)
-            
-            # バッチファイルの内容を構築
-            batch_content = self.build_batch_content()
-            
-            # バッチファイルをSJIS(CP932)で作成
-            with open(batch_path, 'w', encoding='cp932') as f:
-                f.write(batch_content)
-            
-            self.log_message(f"バッチファイルを生成しました (SJIS): {batch_path}")
-            return batch_path
-            
-        except Exception as e:
-            error_msg = f"バッチファイル生成エラー: {str(e)}"
-            self.log_message(error_msg, "error")
-            raise
+            self.log_message(f"設定読み込みエラー: {str(e)}", "error")
+            # エラーが発生した場合はデフォルト設定を適用
+            self.connection_security_var.set('STARTTLS')
+            self.auth_method_var.set('CRAM-MD5')
+            self.log_message("デフォルト設定を適用しました")
 
     def build_batch_content(self):
         """バッチファイルの内容を構築（実行毎別ログファイル版）"""
