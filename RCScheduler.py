@@ -1325,7 +1325,7 @@ class RobocopyScheduler:
             f"タスク '{task_name}' とその関連ファイルを削除しますか？\n\n"
             f"削除されるファイル:\n"
             f"・{task_name}.bat\n"
-            f"・{task_name}_mail.ps1（存在する場合）")
+            f"・{task_name}_batch_mail.ps1（存在する場合）")
         
         if not response:
             return
@@ -1360,7 +1360,7 @@ class RobocopyScheduler:
                     self.log_message(f"バッチファイル削除エラー: {batch_file} - {str(e)}", "error")
             
             # PowerShellスクリプトを削除
-            ps_file = f"{task_name}_mail.ps1"
+            ps_file = f"{task_name}_batch_mail.ps1"
             if os.path.exists(ps_file):
                 try:
                     os.remove(ps_file)
