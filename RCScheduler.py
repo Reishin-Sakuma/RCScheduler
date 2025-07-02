@@ -2261,13 +2261,17 @@ class RobocopyScheduler:
         if ($LogFilePath -and (Test-Path $LogFilePath)) {{
             $writer.WriteLine("ログファイル: $LogFilePath")
             $writer.WriteLine("")
-            $writer.WriteLine("=== ログ内容（最新20行） ===")
-            $logLines = Get-Content $LogFilePath -Tail 20 -ErrorAction SilentlyContinue
+            $writer.WriteLine("=== ログ内容（全文） ===")
+            $logLines = Get-Content $LogFilePath -ErrorAction SilentlyContinue
             if ($logLines) {{
                 foreach ($line in $logLines) {{
                     $writer.WriteLine($line)
                 }}
+            }} else {{
+                $writer.WriteLine("ログファイルの内容を読み取れませんでした")
             }}
+        }} else {{
+            $writer.WriteLine("ログファイルが見つかりません: $LogFilePath")
         }}
         $writer.WriteLine(".")
         $writer.Flush()
