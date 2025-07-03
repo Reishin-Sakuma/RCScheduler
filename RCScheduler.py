@@ -9,7 +9,6 @@ from datetime import datetime, timedelta
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import glob
-from datetime import timedelta
 import tempfile
 
 # バージョン情報
@@ -19,7 +18,13 @@ class RobocopyScheduler:
     def __init__(self, root):
         self.root = root
         self.root.title(f"RCScheduler - ver.{VERSION}")
-        self.root.geometry("800x950")  # 高さを少し増やす
+        self.root.geometry("900x1000")
+        
+        # モダンなスタイル設定
+        self.setup_modern_style()
+        
+        # メインウィンドウの背景色を設定（ダークテーマ）
+        self.root.configure(bg='#1a1a1a')
         
         # 設定を保存するファイル名
         self.config_file = "robocopy_config.json"
@@ -49,6 +54,183 @@ class RobocopyScheduler:
         self.create_widgets()
         self.load_config()
         self.update_task_status()
+    
+    def setup_modern_style(self):
+        """モダンなスタイルを設定"""
+        style = ttk.Style()
+        
+        # テーマを設定
+        style.theme_use('clam')
+        
+        # ダークテーマの色の定義
+        self.colors = {
+            'primary': '#3b82f6',      # 明るい青
+            'secondary': '#6b7280',    # グレー
+            'success': '#10b981',      # 緑
+            'warning': '#f59e0b',      # オレンジ
+            'danger': '#ef4444',       # 赤
+            'bg_primary': '#1a1a1a',   # メイン背景
+            'bg_secondary': '#2d2d2d', # セカンダリ背景
+            'bg_tertiary': '#404040',  # 第三背景
+            'white': '#ffffff',        # 白
+            'dark': '#0f0f0f',         # 最も濃い
+            'border': '#404040',       # ボーダー
+            'text': '#e5e5e5',         # メインテキスト
+            'text_muted': '#a1a1a1',   # 薄いテキスト
+            'text_dark': '#ffffff'     # 白テキスト
+        }
+        
+        # フレームスタイル（ダークテーマ）
+        style.configure('Modern.TLabelframe', 
+                       background=self.colors['bg_secondary'],
+                       borderwidth=1,
+                       relief='solid',
+                       bordercolor=self.colors['border'])
+        
+        style.configure('Modern.TLabelframe.Label',
+                       background=self.colors['bg_secondary'],
+                       foreground=self.colors['text_dark'],
+                       font=('Segoe UI', 10, 'bold'))
+        
+        style.configure('Modern.TFrame',
+                       background=self.colors['bg_secondary'])
+        
+        # ボタンスタイル
+        style.configure('Primary.TButton',
+                       font=('Segoe UI', 9),
+                       padding=(12, 8),
+                       background=self.colors['primary'],
+                       foreground='white',
+                       borderwidth=0,
+                       focuscolor='none')
+        
+        style.map('Primary.TButton',
+                 background=[('active', '#1d4ed8'),
+                           ('pressed', '#1e40af')])
+        
+        style.configure('Secondary.TButton',
+                       font=('Segoe UI', 9),
+                       padding=(12, 8),
+                       background=self.colors['secondary'],
+                       foreground='white',
+                       borderwidth=0,
+                       focuscolor='none')
+        
+        style.map('Secondary.TButton',
+                 background=[('active', '#475569'),
+                           ('pressed', '#334155')])
+        
+        style.configure('Success.TButton',
+                       font=('Segoe UI', 9),
+                       padding=(12, 8),
+                       background=self.colors['success'],
+                       foreground='white',
+                       borderwidth=0,
+                       focuscolor='none')
+        
+        style.map('Success.TButton',
+                 background=[('active', '#059669'),
+                           ('pressed', '#047857')])
+        
+        style.configure('Warning.TButton',
+                       font=('Segoe UI', 9),
+                       padding=(12, 8),
+                       background=self.colors['warning'],
+                       foreground='white',
+                       borderwidth=0,
+                       focuscolor='none')
+        
+        style.map('Warning.TButton',
+                 background=[('active', '#d97706'),
+                           ('pressed', '#b45309')])
+        
+        style.configure('Danger.TButton',
+                       font=('Segoe UI', 9),
+                       padding=(12, 8),
+                       background=self.colors['danger'],
+                       foreground='white',
+                       borderwidth=0,
+                       focuscolor='none')
+        
+        style.map('Danger.TButton',
+                 background=[('active', '#dc2626'),
+                           ('pressed', '#b91c1c')])
+        
+        # エントリスタイル（ダークテーマ）
+        style.configure('Modern.TEntry',
+                       fieldbackground=self.colors['bg_tertiary'],
+                       borderwidth=1,
+                       relief='solid',
+                       bordercolor=self.colors['border'],
+                       padding=(8, 8),
+                       font=('Segoe UI', 9),
+                       foreground=self.colors['text'])
+        
+        style.map('Modern.TEntry',
+                 bordercolor=[('focus', self.colors['primary'])],
+                 fieldbackground=[('focus', self.colors['bg_tertiary'])])
+        
+        # コンボボックススタイル（ダークテーマ）
+        style.configure('Modern.TCombobox',
+                       fieldbackground=self.colors['bg_tertiary'],
+                       borderwidth=1,
+                       relief='solid',
+                       bordercolor=self.colors['border'],
+                       padding=(8, 8),
+                       font=('Segoe UI', 9),
+                       foreground=self.colors['text'])
+        
+        style.map('Modern.TCombobox',
+                 bordercolor=[('focus', self.colors['primary'])],
+                 fieldbackground=[('focus', self.colors['bg_tertiary'])])
+        
+        # ラベルスタイル（ダークテーマ）
+        style.configure('Modern.TLabel',
+                       background=self.colors['bg_secondary'],
+                       foreground=self.colors['text'],
+                       font=('Segoe UI', 9))
+        
+        style.configure('Title.TLabel',
+                       background=self.colors['bg_secondary'],
+                       foreground=self.colors['text_dark'],
+                       font=('Segoe UI', 18, 'bold'))
+        
+        style.configure('Subtitle.TLabel',
+                       background=self.colors['bg_secondary'],
+                       foreground=self.colors['text_muted'],
+                       font=('Segoe UI', 10))
+        
+        # チェックボタンスタイル（ダークテーマ）
+        style.configure('Modern.TCheckbutton',
+                       background=self.colors['bg_secondary'],
+                       foreground=self.colors['text'],
+                       font=('Segoe UI', 9),
+                       focuscolor='none')
+        
+        # ラジオボタンスタイル（ダークテーマ）
+        style.configure('Modern.TRadiobutton',
+                       background=self.colors['bg_secondary'],
+                       foreground=self.colors['text'],
+                       font=('Segoe UI', 9),
+                       focuscolor='none')
+        
+        # スピンボックススタイル（ダークテーマ）
+        style.configure('Modern.TSpinbox',
+                       fieldbackground=self.colors['bg_tertiary'],
+                       borderwidth=1,
+                       relief='solid',
+                       bordercolor=self.colors['border'],
+                       padding=(8, 8),
+                       font=('Segoe UI', 9),
+                       foreground=self.colors['text'])
+        
+        style.map('Modern.TSpinbox',
+                 bordercolor=[('focus', self.colors['primary'])],
+                 fieldbackground=[('focus', self.colors['bg_tertiary'])])
+        
+        # セパレータスタイル（ダークテーマ）
+        style.configure('Modern.TSeparator',
+                       background=self.colors['border'])
     def generate_task_name_from_dest(self):
         """コピー先フォルダからタスク名を自動生成"""
         dest_path = self.dest_var.get()
@@ -250,9 +432,9 @@ class RobocopyScheduler:
     def create_widgets(self):
         # スクロール可能なメインフレームを作成
         # Canvasとスクロールバーを作成
-        self.canvas = tk.Canvas(self.root)
+        self.canvas = tk.Canvas(self.root, bg='#1a1a1a', highlightthickness=0)
         self.scrollbar = ttk.Scrollbar(self.root, orient="vertical", command=self.canvas.yview)
-        self.scrollable_frame = ttk.Frame(self.canvas, padding="10")
+        self.scrollable_frame = ttk.Frame(self.canvas, padding="20", style='Modern.TFrame')
         
         # スクロール可能フレームの設定
         self.scrollable_frame.bind(
@@ -275,115 +457,118 @@ class RobocopyScheduler:
         main_frame = self.scrollable_frame
         
         # ヘッダーセクション（プログラム名と説明）
-        header_frame = ttk.Frame(main_frame)
-        header_frame.grid(row=0, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 15))
+        header_frame = ttk.Frame(main_frame, style='Modern.TFrame')
+        header_frame.grid(row=0, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 25))
 
         # プログラム名
-        title_label = ttk.Label(header_frame, text="RCScheduler", 
-                            font=('', 16, 'bold'), foreground='#2c3e50')
+        title_label = ttk.Label(header_frame, text="RCScheduler", style='Title.TLabel')
         title_label.grid(row=0, column=0, sticky=tk.W)
+
+        # バージョン情報
+        version_label = ttk.Label(header_frame, text=f"v{VERSION}", style='Subtitle.TLabel')
+        version_label.grid(row=0, column=1, sticky=tk.W, padx=(10, 0))
 
         # プログラム説明
         description_label = ttk.Label(header_frame, 
                                     text="Windows用Robocopyスケジューラソフト - フォルダバックアップの自動化\nRobocopyの基本的なコマンド生成からタスクスケジューラ登録、メール通知設定まで一貫して行えます。", 
-                                    font=('', 9), foreground='#7f8c8d')
-        description_label.grid(row=1, column=0, sticky=tk.W, pady=(2, 0))
+                                    style='Subtitle.TLabel')
+        description_label.grid(row=1, column=0, columnspan=2, sticky=tk.W, pady=(8, 0))
 
         # 区切り線
-        separator = ttk.Separator(main_frame, orient='horizontal')
-        separator.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
+        separator = ttk.Separator(main_frame, orient='horizontal', style='Modern.TSeparator')
+        separator.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(15, 20))
 
         # Robocopy設定セクション
-        robocopy_frame = ttk.LabelFrame(main_frame, text="Robocopy設定", padding="10")
-        robocopy_frame.grid(row=2, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
+        robocopy_frame = ttk.LabelFrame(main_frame, text="📁 Robocopy設定", padding="20", style='Modern.TLabelframe')
+        robocopy_frame.grid(row=2, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 15))
         
         # コピー元フォルダ
-        ttk.Label(robocopy_frame, text="コピー元フォルダ:").grid(row=0, column=0, sticky=tk.W)
+        ttk.Label(robocopy_frame, text="コピー元フォルダ:", style='Modern.TLabel').grid(row=0, column=0, sticky=tk.W, pady=(0, 5))
         self.source_var = tk.StringVar()
         # パス変更時のイベントを追加
         self.source_var.trace('w', lambda *args: self.update_auth_state())
-        ttk.Entry(robocopy_frame, textvariable=self.source_var, width=50).grid(row=0, column=1, padx=5)
-        ttk.Button(robocopy_frame, text="参照", 
-                  command=self.browse_source).grid(row=0, column=2)
+        ttk.Entry(robocopy_frame, textvariable=self.source_var, width=50, style='Modern.TEntry').grid(row=0, column=1, padx=(10, 5), pady=(0, 5))
+        ttk.Button(robocopy_frame, text="📂 参照", 
+                  command=self.browse_source, style='Secondary.TButton').grid(row=0, column=2, pady=(0, 5))
         
         # コピー元認証設定フレーム（ネットワークパス用）
-        self.source_auth_frame = ttk.LabelFrame(robocopy_frame, text="コピー元認証設定（ネットワークパス用）", padding="5")
-        self.source_auth_frame.grid(row=1, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=5)
+        self.source_auth_frame = ttk.LabelFrame(robocopy_frame, text="🔐 コピー元認証設定（ネットワークパス用）", padding="15", style='Modern.TLabelframe')
+        self.source_auth_frame.grid(row=1, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(10, 5))
         
         # コピー元認証情報入力欄
-        ttk.Label(self.source_auth_frame, text="ユーザー名:").grid(row=0, column=0, sticky=tk.W)
-        source_username_entry = ttk.Entry(self.source_auth_frame, textvariable=self.source_username_var, width=20)
-        source_username_entry.grid(row=0, column=1, padx=5)
+        ttk.Label(self.source_auth_frame, text="ユーザー名:", style='Modern.TLabel').grid(row=0, column=0, sticky=tk.W, pady=(0, 5))
+        source_username_entry = ttk.Entry(self.source_auth_frame, textvariable=self.source_username_var, width=20, style='Modern.TEntry')
+        source_username_entry.grid(row=0, column=1, padx=(10, 5), pady=(0, 5))
         self.source_auth_widgets.append(source_username_entry)
         
-        ttk.Label(self.source_auth_frame, text="パスワード:").grid(row=0, column=2, sticky=tk.W, padx=(10,0))
-        source_password_entry = ttk.Entry(self.source_auth_frame, textvariable=self.source_password_var, width=20, show="*")
-        source_password_entry.grid(row=0, column=3, padx=5)
+        ttk.Label(self.source_auth_frame, text="パスワード:", style='Modern.TLabel').grid(row=0, column=2, sticky=tk.W, padx=(15, 0), pady=(0, 5))
+        source_password_entry = ttk.Entry(self.source_auth_frame, textvariable=self.source_password_var, width=20, show="*", style='Modern.TEntry')
+        source_password_entry.grid(row=0, column=3, padx=(10, 5), pady=(0, 5))
         self.source_auth_widgets.append(source_password_entry)
         
-        ttk.Label(self.source_auth_frame, text="ドメイン:").grid(row=1, column=0, sticky=tk.W)
-        source_domain_entry = ttk.Entry(self.source_auth_frame, textvariable=self.source_domain_var, width=20)
-        source_domain_entry.grid(row=1, column=1, padx=5)
+        ttk.Label(self.source_auth_frame, text="ドメイン:", style='Modern.TLabel').grid(row=1, column=0, sticky=tk.W, pady=(5, 0))
+        source_domain_entry = ttk.Entry(self.source_auth_frame, textvariable=self.source_domain_var, width=20, style='Modern.TEntry')
+        source_domain_entry.grid(row=1, column=1, padx=(10, 5), pady=(5, 0))
         self.source_auth_widgets.append(source_domain_entry)
         
-        source_test_button = ttk.Button(self.source_auth_frame, text="接続テスト", 
-                  command=lambda: self.test_network_connection("source"))
-        source_test_button.grid(row=1, column=2, columnspan=2, padx=10)
+        source_test_button = ttk.Button(self.source_auth_frame, text="🔍 接続テスト", 
+                  command=lambda: self.test_network_connection("source"), style='Secondary.TButton')
+        source_test_button.grid(row=1, column=2, columnspan=2, padx=(15, 0), pady=(5, 0))
         self.source_auth_widgets.append(source_test_button)
         
         # コピー先フォルダ
-        ttk.Label(robocopy_frame, text="コピー先フォルダ:").grid(row=2, column=0, sticky=tk.W)
+        ttk.Label(robocopy_frame, text="コピー先フォルダ:", style='Modern.TLabel').grid(row=2, column=0, sticky=tk.W, pady=(15, 5))
         self.dest_var = tk.StringVar()
-        # パス変更時のイベントを追加
-        self.dest_var.trace('w', lambda *args: self.update_auth_state())
-        ttk.Entry(robocopy_frame, textvariable=self.dest_var, width=50).grid(row=2, column=1, padx=5)
-        ttk.Button(robocopy_frame, text="参照", 
-                  command=self.browse_dest).grid(row=2, column=2)
+        # パス変更時のイベントを追加（認証状態とタスク名自動更新）
+        self.dest_var.trace('w', lambda *args: (self.update_auth_state(), self.update_task_name_from_dest()))
+        ttk.Entry(robocopy_frame, textvariable=self.dest_var, width=50, style='Modern.TEntry').grid(row=2, column=1, padx=(10, 5), pady=(15, 5))
+        ttk.Button(robocopy_frame, text="📂 参照", 
+                  command=self.browse_dest, style='Secondary.TButton').grid(row=2, column=2, pady=(15, 5))
         
         # コピー先認証設定フレーム（ネットワークパス用）
-        self.dest_auth_frame = ttk.LabelFrame(robocopy_frame, text="コピー先認証設定（ネットワークパス用）", padding="5")
-        self.dest_auth_frame.grid(row=3, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=5)
+        self.dest_auth_frame = ttk.LabelFrame(robocopy_frame, text="🔐 コピー先認証設定（ネットワークパス用）", padding="15", style='Modern.TLabelframe')
+        self.dest_auth_frame.grid(row=3, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(10, 5))
         
         # コピー先認証情報入力欄
-        ttk.Label(self.dest_auth_frame, text="ユーザー名:").grid(row=0, column=0, sticky=tk.W)
-        dest_username_entry = ttk.Entry(self.dest_auth_frame, textvariable=self.dest_username_var, width=20)
-        dest_username_entry.grid(row=0, column=1, padx=5)
+        ttk.Label(self.dest_auth_frame, text="ユーザー名:", style='Modern.TLabel').grid(row=0, column=0, sticky=tk.W, pady=(0, 5))
+        dest_username_entry = ttk.Entry(self.dest_auth_frame, textvariable=self.dest_username_var, width=20, style='Modern.TEntry')
+        dest_username_entry.grid(row=0, column=1, padx=(10, 5), pady=(0, 5))
         self.dest_auth_widgets.append(dest_username_entry)
         
-        ttk.Label(self.dest_auth_frame, text="パスワード:").grid(row=0, column=2, sticky=tk.W, padx=(10,0))
-        dest_password_entry = ttk.Entry(self.dest_auth_frame, textvariable=self.dest_password_var, width=20, show="*")
-        dest_password_entry.grid(row=0, column=3, padx=5)
+        ttk.Label(self.dest_auth_frame, text="パスワード:", style='Modern.TLabel').grid(row=0, column=2, sticky=tk.W, padx=(15, 0), pady=(0, 5))
+        dest_password_entry = ttk.Entry(self.dest_auth_frame, textvariable=self.dest_password_var, width=20, show="*", style='Modern.TEntry')
+        dest_password_entry.grid(row=0, column=3, padx=(10, 5), pady=(0, 5))
         self.dest_auth_widgets.append(dest_password_entry)
         
-        ttk.Label(self.dest_auth_frame, text="ドメイン:").grid(row=1, column=0, sticky=tk.W)
-        dest_domain_entry = ttk.Entry(self.dest_auth_frame, textvariable=self.dest_domain_var, width=20)
-        dest_domain_entry.grid(row=1, column=1, padx=5)
+        ttk.Label(self.dest_auth_frame, text="ドメイン:", style='Modern.TLabel').grid(row=1, column=0, sticky=tk.W, pady=(5, 0))
+        dest_domain_entry = ttk.Entry(self.dest_auth_frame, textvariable=self.dest_domain_var, width=20, style='Modern.TEntry')
+        dest_domain_entry.grid(row=1, column=1, padx=(10, 5), pady=(5, 0))
         self.dest_auth_widgets.append(dest_domain_entry)
         
-        dest_test_button = ttk.Button(self.dest_auth_frame, text="接続テスト", 
-                  command=lambda: self.test_network_connection("dest"))
-        dest_test_button.grid(row=1, column=2, columnspan=2, padx=10)
+        dest_test_button = ttk.Button(self.dest_auth_frame, text="🔍 接続テスト", 
+                  command=lambda: self.test_network_connection("dest"), style='Secondary.TButton')
+        dest_test_button.grid(row=1, column=2, columnspan=2, padx=(15, 0), pady=(5, 0))
         self.dest_auth_widgets.append(dest_test_button)
         
         # Robocopyオプション
-        ttk.Label(robocopy_frame, text="Robocopyオプション:").grid(row=4, column=0, sticky=(tk.W, tk.N), padx=5, pady=5)
+        ttk.Label(robocopy_frame, text="⚙️ Robocopyオプション:", style='Modern.TLabel').grid(row=4, column=0, sticky=(tk.W, tk.N), pady=(15, 5))
         
         # オプション選択用のフレーム
-        options_frame = ttk.Frame(robocopy_frame)
-        options_frame.grid(row=4, column=1, columnspan=2, sticky=(tk.W, tk.E), padx=5, pady=5)
+        options_frame = ttk.Frame(robocopy_frame, style='Modern.TFrame')
+        options_frame.grid(row=4, column=1, columnspan=2, sticky=(tk.W, tk.E), padx=(10, 0), pady=(15, 5))
         
         # コピーモード選択（ラジオボタン）
-        copy_mode_frame = ttk.LabelFrame(options_frame, text="コピーモード", padding="10")
-        copy_mode_frame.grid(row=0, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
+        copy_mode_frame = ttk.LabelFrame(options_frame, text="📋 コピーモード", padding="15", style='Modern.TLabelframe')
+        copy_mode_frame.grid(row=0, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 15))
         
         ttk.Radiobutton(copy_mode_frame, text="/MIR - ミラーモード（削除も同期）", 
-                       variable=self.copy_mode_var, value="MIR").grid(row=0, column=0, sticky=tk.W, pady=2)
+                       variable=self.copy_mode_var, value="MIR", style='Modern.TRadiobutton').grid(row=0, column=0, sticky=tk.W, pady=3)
         ttk.Radiobutton(copy_mode_frame, text="/E - サブディレクトリコピー（削除なし）", 
-                       variable=self.copy_mode_var, value="E").grid(row=1, column=0, sticky=tk.W, pady=2)
+                       variable=self.copy_mode_var, value="E", style='Modern.TRadiobutton').grid(row=1, column=0, sticky=tk.W, pady=3)
         
         # その他のオプション（チェックボックス）
-        other_options_frame = ttk.LabelFrame(options_frame, text="その他のオプション", padding="10")
-        other_options_frame.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
+        other_options_frame = ttk.LabelFrame(options_frame, text="🔧 その他のオプション", padding="15", style='Modern.TLabelframe')
+        other_options_frame.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 15))
         
         # オプション定義（チェックボックス用）- /SECを追加
         options_config = [
@@ -400,45 +585,45 @@ class RobocopyScheduler:
             row = i // 2
             col = i % 2
             
-            frame = ttk.Frame(other_options_frame)
-            frame.grid(row=row, column=col, sticky=tk.W, padx=10, pady=2)
+            frame = ttk.Frame(other_options_frame, style='Modern.TFrame')
+            frame.grid(row=row, column=col, sticky=tk.W, padx=15, pady=5)
             
-            ttk.Checkbutton(frame, variable=self.option_vars[var_name]).grid(row=0, column=0)
-            ttk.Label(frame, text=f"{option}").grid(row=0, column=1, padx=(5, 0), sticky=tk.W)
-            ttk.Label(frame, text=f"({description})", font=('', 8)).grid(row=1, column=1, padx=(5, 0), sticky=tk.W)
+            ttk.Checkbutton(frame, variable=self.option_vars[var_name], style='Modern.TCheckbutton').grid(row=0, column=0)
+            ttk.Label(frame, text=f"{option}", style='Modern.TLabel', font=('Segoe UI', 9, 'bold')).grid(row=0, column=1, padx=(8, 0), sticky=tk.W)
+            ttk.Label(frame, text=f"({description})", style='Subtitle.TLabel').grid(row=1, column=1, padx=(8, 0), sticky=tk.W)
         
         # リトライ・ログ設定フレーム
-        config_frame = ttk.LabelFrame(options_frame, text="詳細設定", padding="10")
+        config_frame = ttk.LabelFrame(options_frame, text="🔧 詳細設定", padding="15", style='Modern.TLabelframe')
         config_frame.grid(row=2, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
         
         # リトライ設定
-        retry_frame = ttk.Frame(config_frame)
-        retry_frame.grid(row=0, column=0, sticky=tk.W)
+        retry_frame = ttk.Frame(config_frame, style='Modern.TFrame')
+        retry_frame.grid(row=0, column=0, sticky=tk.W, pady=(0, 8))
         
-        ttk.Label(retry_frame, text="リトライ回数:").grid(row=0, column=0, sticky=tk.W)
+        ttk.Label(retry_frame, text="リトライ回数:", style='Modern.TLabel').grid(row=0, column=0, sticky=tk.W)
         self.retry_var = tk.StringVar(value="1")
-        ttk.Spinbox(retry_frame, from_=0, to=10, textvariable=self.retry_var, width=5).grid(row=0, column=1, padx=5)
+        ttk.Spinbox(retry_frame, from_=0, to=10, textvariable=self.retry_var, width=8, style='Modern.TSpinbox').grid(row=0, column=1, padx=(8, 0))
         
-        ttk.Label(retry_frame, text="リトライ間隔(秒):").grid(row=0, column=2, sticky=tk.W, padx=(10, 0))
+        ttk.Label(retry_frame, text="リトライ間隔(秒):", style='Modern.TLabel').grid(row=0, column=2, sticky=tk.W, padx=(15, 0))
         self.wait_var = tk.StringVar(value="1")
-        ttk.Spinbox(retry_frame, from_=1, to=60, textvariable=self.wait_var, width=5).grid(row=0, column=3, padx=5)
+        ttk.Spinbox(retry_frame, from_=1, to=60, textvariable=self.wait_var, width=8, style='Modern.TSpinbox').grid(row=0, column=3, padx=(8, 0))
         
         # ログファイル設定
-        log_frame = ttk.Frame(config_frame)
-        log_frame.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(5, 0))
+        log_frame = ttk.Frame(config_frame, style='Modern.TFrame')
+        log_frame.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(8, 8))
         
-        ttk.Label(log_frame, text="ログファイル保存先:").grid(row=0, column=0, sticky=tk.W)
+        ttk.Label(log_frame, text="ログファイル保存先:", style='Modern.TLabel').grid(row=0, column=0, sticky=tk.W, pady=(0, 5))
         self.log_file_var = tk.StringVar(value="robocopy_log.txt")
-        ttk.Entry(log_frame, textvariable=self.log_file_var, width=40).grid(row=0, column=1, padx=5, sticky=(tk.W, tk.E))
-        ttk.Button(log_frame, text="参照", command=self.browse_log_file).grid(row=0, column=2, padx=5)
+        ttk.Entry(log_frame, textvariable=self.log_file_var, width=40, style='Modern.TEntry').grid(row=0, column=1, padx=(10, 5), sticky=(tk.W, tk.E))
+        ttk.Button(log_frame, text="📂 参照", command=self.browse_log_file, style='Secondary.TButton').grid(row=0, column=2)
         
         # 追加オプション欄
-        custom_frame = ttk.Frame(config_frame)
-        custom_frame.grid(row=2, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(5, 0))
+        custom_frame = ttk.Frame(config_frame, style='Modern.TFrame')
+        custom_frame.grid(row=2, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(8, 0))
         
-        ttk.Label(custom_frame, text="追加オプション:").grid(row=0, column=0, sticky=tk.W)
+        ttk.Label(custom_frame, text="追加オプション:", style='Modern.TLabel').grid(row=0, column=0, sticky=tk.W, pady=(0, 5))
         self.custom_options_var = tk.StringVar()
-        ttk.Entry(custom_frame, textvariable=self.custom_options_var, width=50).grid(row=0, column=1, padx=5, sticky=(tk.W, tk.E))
+        ttk.Entry(custom_frame, textvariable=self.custom_options_var, width=50, style='Modern.TEntry').grid(row=0, column=1, padx=(10, 0), sticky=(tk.W, tk.E))
         
         # デフォルト設定：全オプションを有効にする
         self.copy_mode_var.set("MIR")  # デフォルトは/MIR
@@ -449,128 +634,119 @@ class RobocopyScheduler:
         self.option_vars["enable_log"].set(True)       # LOG
         
         # スケジュール設定セクション
-        schedule_frame = ttk.LabelFrame(main_frame, text="スケジュール設定", padding="10")
-        schedule_frame.grid(row=3, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
+        schedule_frame = ttk.LabelFrame(main_frame, text="⏰ スケジュール設定", padding="20", style='Modern.TLabelframe')
+        schedule_frame.grid(row=3, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 15))
         # タスク名設定（スケジュール設定の最後に追加）
-        task_name_frame = ttk.Frame(schedule_frame)
-        task_name_frame.grid(row=3, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
+        task_name_frame = ttk.Frame(schedule_frame, style='Modern.TFrame')
+        task_name_frame.grid(row=3, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(15, 0))
         
-        ttk.Label(task_name_frame, text="タスク名:").grid(row=0, column=0, sticky=tk.W)
-        ttk.Entry(task_name_frame, textvariable=self.task_name_var, width=40).grid(row=0, column=1, padx=5, sticky=(tk.W, tk.E))
-        ttk.Button(task_name_frame, text="自動生成", 
-                  command=self.update_task_name_from_dest).grid(row=0, column=2, padx=5)
+        ttk.Label(task_name_frame, text="タスク名:", style='Modern.TLabel').grid(row=0, column=0, sticky=tk.W, pady=(0, 5))
+        ttk.Entry(task_name_frame, textvariable=self.task_name_var, width=40, style='Modern.TEntry').grid(row=0, column=1, padx=(10, 5), sticky=(tk.W, tk.E), pady=(0, 5))
+        ttk.Button(task_name_frame, text="🔧 自動生成", 
+                  command=self.update_task_name_from_dest, style='Secondary.TButton').grid(row=0, column=2, pady=(0, 5))
         
         # 説明ラベル
         ttk.Label(task_name_frame, text="※ コピー先フォルダを選択すると自動で生成されます", 
-                 font=('', 8), foreground='gray').grid(row=1, column=1, sticky=tk.W, padx=5)
-
-        # コピー先フォルダ
-        ttk.Label(robocopy_frame, text="コピー先フォルダ:").grid(row=2, column=0, sticky=tk.W)
-        self.dest_var = tk.StringVar()
-        # パス変更時のイベントを追加（タスク名自動生成も含める）
-        self.dest_var.trace('w', lambda *args: (self.update_auth_state(), self.update_task_name_from_dest()))
-        ttk.Entry(robocopy_frame, textvariable=self.dest_var, width=50).grid(row=2, column=1, padx=5)
-        ttk.Button(robocopy_frame, text="参照", 
-                  command=self.browse_dest).grid(row=2, column=2)
+                 style='Subtitle.TLabel').grid(row=1, column=1, sticky=tk.W, padx=(10, 0))
         
         # 実行頻度
-        ttk.Label(schedule_frame, text="実行頻度:").grid(row=0, column=0, sticky=tk.W)
+        ttk.Label(schedule_frame, text="実行頻度:", style='Modern.TLabel').grid(row=0, column=0, sticky=tk.W, pady=(0, 8))
         self.frequency_var = tk.StringVar(value="毎日")
         self.frequency_combo = ttk.Combobox(schedule_frame, textvariable=self.frequency_var,
-                                     values=["毎日", "毎週"])
-        self.frequency_combo.grid(row=0, column=1, padx=5)
+                                     values=["毎日", "毎週"], style='Modern.TCombobox')
+        self.frequency_combo.grid(row=0, column=1, padx=(10, 0), pady=(0, 8))
         self.frequency_combo.state(['readonly'])
         # 頻度変更時のイベントを追加
         self.frequency_combo.bind('<<ComboboxSelected>>', self.on_frequency_changed)
         
         # 曜日選択（毎週の場合）
-        self.weekday_label = ttk.Label(schedule_frame, text="曜日:")
-        self.weekday_label.grid(row=1, column=0, sticky=tk.W)
+        self.weekday_label = ttk.Label(schedule_frame, text="曜日:", style='Modern.TLabel')
+        self.weekday_label.grid(row=1, column=0, sticky=tk.W, pady=(0, 8))
         self.weekday_var = tk.StringVar(value="月曜日")
         self.weekday_combo = ttk.Combobox(schedule_frame, textvariable=self.weekday_var,
-                                   values=["月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日", "日曜日"])
-        self.weekday_combo.grid(row=1, column=1, padx=5)
+                                   values=["月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日", "日曜日"], style='Modern.TCombobox')
+        self.weekday_combo.grid(row=1, column=1, padx=(10, 0), pady=(0, 8))
         self.weekday_combo.state(['readonly'])
         
         # 実行時刻
-        ttk.Label(schedule_frame, text="実行時刻:").grid(row=2, column=0, sticky=tk.W)
-        time_frame = ttk.Frame(schedule_frame)
-        time_frame.grid(row=2, column=1, padx=5)
+        ttk.Label(schedule_frame, text="実行時刻:", style='Modern.TLabel').grid(row=2, column=0, sticky=tk.W, pady=(0, 8))
+        time_frame = ttk.Frame(schedule_frame, style='Modern.TFrame')
+        time_frame.grid(row=2, column=1, padx=(10, 0), pady=(0, 8))
         
         self.hour_var = tk.StringVar(value="09")
         self.minute_var = tk.StringVar(value="00")
         
         ttk.Spinbox(time_frame, from_=0, to=23, textvariable=self.hour_var, 
-                   width=3, format="%02.0f").grid(row=0, column=0)
-        ttk.Label(time_frame, text=":").grid(row=0, column=1)
+                   width=5, format="%02.0f", style='Modern.TSpinbox').grid(row=0, column=0)
+        ttk.Label(time_frame, text=" : ", style='Modern.TLabel').grid(row=0, column=1, padx=5)
         ttk.Spinbox(time_frame, from_=0, to=59, textvariable=self.minute_var, 
-                   width=3, format="%02.0f").grid(row=0, column=2)
+                   width=5, format="%02.0f", style='Modern.TSpinbox').grid(row=0, column=2)
         
         # メール設定セクション
-        email_frame = ttk.LabelFrame(main_frame, text="メール通知設定", padding="10")
-        email_frame.grid(row=4, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
+        email_frame = ttk.LabelFrame(main_frame, text="📧 メール通知設定", padding="20", style='Modern.TLabelframe')
+        email_frame.grid(row=4, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 15))
 
         # メール送信有効化チェックボックス
         self.email_enabled_var = tk.BooleanVar()
         email_check = ttk.Checkbutton(email_frame, text="実行結果をメールで送信", 
                                     variable=self.email_enabled_var,
-                                    command=self.toggle_email_settings)
-        email_check.grid(row=0, column=0, columnspan=2, sticky=tk.W)
+                                    command=self.toggle_email_settings, style='Modern.TCheckbutton')
+        email_check.grid(row=0, column=0, columnspan=2, sticky=tk.W, pady=(0, 15))
 
         # SMTPサーバー設定
-        self.email_settings_frame = ttk.Frame(email_frame)
+        self.email_settings_frame = ttk.Frame(email_frame, style='Modern.TFrame')
         self.email_settings_frame.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E))
 
-        ttk.Label(self.email_settings_frame, text="SMTPサーバー:").grid(row=0, column=0, sticky=tk.W)
+        ttk.Label(self.email_settings_frame, text="SMTPサーバー:", style='Modern.TLabel').grid(row=0, column=0, sticky=tk.W, pady=(0, 8))
         self.smtp_server_var = tk.StringVar(value="smtp.gmail.com")
-        ttk.Entry(self.email_settings_frame, textvariable=self.smtp_server_var, width=30).grid(row=0, column=1, padx=5)
+        ttk.Entry(self.email_settings_frame, textvariable=self.smtp_server_var, width=30, style='Modern.TEntry').grid(row=0, column=1, padx=(10, 5), pady=(0, 8))
 
-        ttk.Label(self.email_settings_frame, text="ポート:").grid(row=0, column=2, sticky=tk.W)
+        ttk.Label(self.email_settings_frame, text="ポート:", style='Modern.TLabel').grid(row=0, column=2, sticky=tk.W, padx=(15, 0), pady=(0, 8))
         self.smtp_port_var = tk.StringVar(value="587")
-        ttk.Entry(self.email_settings_frame, textvariable=self.smtp_port_var, width=10).grid(row=0, column=3, padx=5)
+        ttk.Entry(self.email_settings_frame, textvariable=self.smtp_port_var, width=10, style='Modern.TEntry').grid(row=0, column=3, padx=(10, 0), pady=(0, 8))
 
         # 接続の保護プルダウン（修正版）
-        ttk.Label(self.email_settings_frame, text="接続の保護:").grid(row=1, column=0, sticky=tk.W)
+        ttk.Label(self.email_settings_frame, text="接続の保護:", style='Modern.TLabel').grid(row=1, column=0, sticky=tk.W, pady=(0, 8))
         self.connection_security_var = tk.StringVar(value="STARTTLS")
         self.connection_security_combo = ttk.Combobox(self.email_settings_frame, 
                                                     textvariable=self.connection_security_var,
                                                     values=["暗号化なし", "STARTTLS", "SSL/TLS"],
                                                     width=15,
-                                                    state='readonly')  # この書き方に変更
-        self.connection_security_combo.grid(row=1, column=1, padx=5)
+                                                    state='readonly', style='Modern.TCombobox')  # この書き方に変更
+        self.connection_security_combo.grid(row=1, column=1, padx=(10, 5), pady=(0, 8))
 
         # 認証方式プルダウン（修正版）
-        ttk.Label(self.email_settings_frame, text="認証方式:").grid(row=1, column=2, sticky=tk.W)
+        ttk.Label(self.email_settings_frame, text="認証方式:", style='Modern.TLabel').grid(row=1, column=2, sticky=tk.W, padx=(15, 0), pady=(0, 8))
         self.auth_method_var = tk.StringVar(value="CRAM-MD5")
         self.auth_method_combo = ttk.Combobox(self.email_settings_frame, 
                                             textvariable=self.auth_method_var,
                                             values=["CRAM-MD5", "LOGIN", "PLAIN", "DIGEST-MD5"],
                                             width=15,
-                                            state='readonly')  # この書き方に変更
-        self.auth_method_combo.grid(row=1, column=3, padx=5)
+                                            state='readonly', style='Modern.TCombobox')  # この書き方に変更
+        self.auth_method_combo.grid(row=1, column=3, padx=(10, 0), pady=(0, 8))
 
-        ttk.Label(self.email_settings_frame, text="送信者メール:").grid(row=2, column=0, sticky=tk.W)
+        ttk.Label(self.email_settings_frame, text="送信者メール:", style='Modern.TLabel').grid(row=2, column=0, sticky=tk.W, pady=(0, 8))
         self.sender_email_var = tk.StringVar()
-        ttk.Entry(self.email_settings_frame, textvariable=self.sender_email_var, width=40).grid(row=2, column=1, columnspan=2, padx=5)
+        ttk.Entry(self.email_settings_frame, textvariable=self.sender_email_var, width=40, style='Modern.TEntry').grid(row=2, column=1, columnspan=2, padx=(10, 0), pady=(0, 8))
 
-        ttk.Label(self.email_settings_frame, text="送信者パスワード:").grid(row=3, column=0, sticky=tk.W)
+        ttk.Label(self.email_settings_frame, text="送信者パスワード:", style='Modern.TLabel').grid(row=3, column=0, sticky=tk.W, pady=(0, 8))
         self.sender_password_var = tk.StringVar()
         ttk.Entry(self.email_settings_frame, textvariable=self.sender_password_var, 
-                width=40, show="*").grid(row=3, column=1, columnspan=2, padx=5)
+                width=40, show="*", style='Modern.TEntry').grid(row=3, column=1, columnspan=2, padx=(10, 0), pady=(0, 8))
 
-        ttk.Label(self.email_settings_frame, text="送信先メール:").grid(row=4, column=0, sticky=tk.W)
+        ttk.Label(self.email_settings_frame, text="送信先メール:", style='Modern.TLabel').grid(row=4, column=0, sticky=tk.W, pady=(0, 15))
         self.recipient_email_var = tk.StringVar()
         ttk.Entry(self.email_settings_frame, textvariable=self.recipient_email_var, 
-                width=40).grid(row=4, column=1, columnspan=2, padx=5)
+                width=40, style='Modern.TEntry').grid(row=4, column=1, columnspan=2, padx=(10, 0), pady=(0, 15))
 
         # SMTP接続テストボタン
-        smtp_test_frame = ttk.Frame(self.email_settings_frame)
-        smtp_test_frame.grid(row=5, column=0, columnspan=5, pady=10)
+        smtp_test_frame = ttk.Frame(self.email_settings_frame, style='Modern.TFrame')
+        smtp_test_frame.grid(row=5, column=0, columnspan=5, pady=(10, 0))
 
-        ttk.Button(smtp_test_frame, text="SMTP接続テスト", 
-                command=self.test_smtp_connection).grid(row=0, column=0, padx=5)
-        ttk.Button(smtp_test_frame, text="メールテスト", 
-                command=self.send_email_with_flexible_auth).grid(row=0, column=1, padx=5)  # 新しいメソッド名
+        ttk.Button(smtp_test_frame, text="🔍 SMTP接続テスト", 
+                command=self.test_smtp_connection, style='Secondary.TButton').grid(row=0, column=0, padx=(0, 10))
+        ttk.Button(smtp_test_frame, text="📧 メールテスト", 
+                command=self.send_email_with_flexible_auth, style='Secondary.TButton').grid(row=0, column=1)  # 新しいメソッド名
 
         # 初期状態ではメール設定を無効化
         self.toggle_email_settings()
@@ -580,60 +756,64 @@ class RobocopyScheduler:
         self.disable_auth_widgets(self.dest_auth_widgets)
         
         # 制御ボタンセクション
-        button_frame = ttk.Frame(main_frame)
-        button_frame.grid(row=5, column=0, columnspan=2, pady=20)
+        button_frame = ttk.Frame(main_frame, style='Modern.TFrame')
+        button_frame.grid(row=5, column=0, columnspan=2, pady=(25, 20))
 
         # 上段ボタン
-        top_button_frame = ttk.Frame(button_frame)
-        top_button_frame.grid(row=0, column=0, columnspan=4, pady=(0, 5))
+        top_button_frame = ttk.Frame(button_frame, style='Modern.TFrame')
+        top_button_frame.grid(row=0, column=0, columnspan=4, pady=(0, 10))
 
-        ttk.Button(top_button_frame, text="設定を保存", 
-                  command=self.save_config).grid(row=0, column=0, padx=5)
-        ttk.Button(top_button_frame, text="今すぐ実行", 
-                  command=self.run_now).grid(row=0, column=1, padx=5)
-        ttk.Button(top_button_frame, text="バッチテスト", 
-                  command=self.test_batch_script).grid(row=0, column=2, padx=5)
+        ttk.Button(top_button_frame, text="💾 設定を保存", 
+                  command=self.save_config, style='Primary.TButton').grid(row=0, column=0, padx=5)
+        ttk.Button(top_button_frame, text="▶️ 今すぐ実行", 
+                  command=self.run_now, style='Success.TButton').grid(row=0, column=1, padx=5)
+        ttk.Button(top_button_frame, text="🧪 バッチテスト", 
+                  command=self.test_batch_script, style='Warning.TButton').grid(row=0, column=2, padx=5)
 
         # 下段ボタン
-        bottom_button_frame = ttk.Frame(button_frame)
-        bottom_button_frame.grid(row=1, column=0, columnspan=4, pady=(5, 0))
+        bottom_button_frame = ttk.Frame(button_frame, style='Modern.TFrame')
+        bottom_button_frame.grid(row=1, column=0, columnspan=4, pady=(0, 0))
 
-        ttk.Button(bottom_button_frame, text="タスク作成/更新", 
-                  command=self.create_scheduled_task).grid(row=0, column=0, padx=5)
-        ttk.Button(bottom_button_frame, text="タスク削除", 
-                  command=self.delete_scheduled_task).grid(row=0, column=1, padx=5)
+        ttk.Button(bottom_button_frame, text="📅 タスク作成/更新", 
+                  command=self.create_scheduled_task, style='Primary.TButton').grid(row=0, column=0, padx=5)
+        ttk.Button(bottom_button_frame, text="🗑️ タスク削除", 
+                  command=self.delete_scheduled_task, style='Danger.TButton').grid(row=0, column=1, padx=5)
         
         # タスクステータス表示
-        status_frame = ttk.LabelFrame(main_frame, text="タスクステータス", padding="10")
-        status_frame.grid(row=6, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
+        status_frame = ttk.LabelFrame(main_frame, text="📊 タスクステータス", padding="20", style='Modern.TLabelframe')
+        status_frame.grid(row=6, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 15))
 
         # タスク履歴設定セクション
-        history_frame = ttk.LabelFrame(main_frame, text="タスク履歴設定", padding="10")
-        history_frame.grid(row=7, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
+        history_frame = ttk.LabelFrame(main_frame, text="📅 タスク履歴設定", padding="20", style='Modern.TLabelframe')
+        history_frame.grid(row=7, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 15))
 
         # 履歴有効化チェックボックス
         self.history_enabled_var = tk.BooleanVar()
         ttk.Checkbutton(history_frame, text="すべてのタスク履歴を有効にする", 
-                    variable=self.history_enabled_var).grid(row=0, column=0, sticky=tk.W)
+                    variable=self.history_enabled_var, style='Modern.TCheckbutton').grid(row=0, column=0, sticky=tk.W, pady=(0, 10))
 
-        history_button_frame = ttk.Frame(history_frame)
-        history_button_frame.grid(row=1, column=0, pady=5)
+        history_button_frame = ttk.Frame(history_frame, style='Modern.TFrame')
+        history_button_frame.grid(row=1, column=0, pady=(0, 0))
 
-        ttk.Button(history_button_frame, text="履歴設定を適用", 
-                command=self.apply_task_history).grid(row=0, column=0, padx=5)
-        ttk.Button(history_button_frame, text="現在の設定確認", 
-                command=self.check_task_history).grid(row=0, column=1, padx=5)
+        ttk.Button(history_button_frame, text="⚙️ 履歴設定を適用", 
+                command=self.apply_task_history, style='Primary.TButton').grid(row=0, column=0, padx=(0, 10))
+        ttk.Button(history_button_frame, text="🔍 現在の設定確認", 
+                command=self.check_task_history, style='Secondary.TButton').grid(row=0, column=1)
         
         self.task_status_var = tk.StringVar(value="確認中...")
-        ttk.Label(status_frame, textvariable=self.task_status_var).grid(row=0, column=0, sticky=tk.W)
-        ttk.Button(status_frame, text="ステータス更新", 
-                  command=self.update_task_status).grid(row=0, column=1, padx=10)
+        ttk.Label(status_frame, textvariable=self.task_status_var, style='Modern.TLabel').grid(row=0, column=0, sticky=tk.W, pady=(0, 5))
+        ttk.Button(status_frame, text="🔄 ステータス更新", 
+                  command=self.update_task_status, style='Secondary.TButton').grid(row=0, column=1, padx=(15, 0), pady=(0, 5))
         
         # ログ表示エリア
-        log_frame = ttk.LabelFrame(main_frame, text="実行ログ", padding="10")
-        log_frame.grid(row=8, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), pady=5)
+        log_frame = ttk.LabelFrame(main_frame, text="📜 実行ログ", padding="20", style='Modern.TLabelframe')
+        log_frame.grid(row=8, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 15))
         
-        self.log_text = tk.Text(log_frame, height=12, width=100)
+        # ダークテーマ対応のテキストエリア
+        self.log_text = tk.Text(log_frame, height=12, width=100, 
+                              bg=self.colors['bg_tertiary'], fg=self.colors['text'], 
+                              insertbackground=self.colors['text'], selectbackground=self.colors['primary'],
+                              font=('Consolas', 9), relief='solid', borderwidth=1)
         scrollbar = ttk.Scrollbar(log_frame, orient="vertical", command=self.log_text.yview)
         self.log_text.configure(yscrollcommand=scrollbar.set)
         self.log_text.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
@@ -641,8 +821,9 @@ class RobocopyScheduler:
         
         # ステータスバー
         self.status_var = tk.StringVar(value="準備完了")
-        status_bar = ttk.Label(main_frame, textvariable=self.status_var, relief=tk.SUNKEN)
-        status_bar.grid(row=9, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
+        status_bar = ttk.Label(main_frame, textvariable=self.status_var, style='Modern.TLabel', 
+                             relief=tk.SUNKEN, padding=(10, 5))
+        status_bar.grid(row=9, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 0))
 
         # 初期状態で曜日選択の有効/無効を設定
         self.update_weekday_state()
@@ -835,28 +1016,6 @@ class RobocopyScheduler:
         if file_path:
             self.log_file_var.set(file_path)
     
-    def toggle_email_settings(self):
-        """メール設定の有効/無効を切り替え"""
-        if self.email_enabled_var.get():
-            # メール設定を有効化
-            for widget in self.email_settings_frame.winfo_children():
-                if isinstance(widget, ttk.Frame):
-                    # フレーム内のウィジェットも有効化
-                    for child in widget.winfo_children():
-                        if hasattr(child, 'configure'):
-                            child.configure(state='normal')
-                elif hasattr(widget, 'configure'):
-                    widget.configure(state='normal')
-        else:
-            # メール設定を無効化
-            for widget in self.email_settings_frame.winfo_children():
-                if isinstance(widget, ttk.Frame):
-                    # フレーム内のウィジェットも無効化
-                    for child in widget.winfo_children():
-                        if hasattr(child, 'configure') and not isinstance(child, ttk.Label):
-                            child.configure(state='disabled')
-                elif hasattr(widget, 'configure') and not isinstance(widget, ttk.Label):
-                    widget.configure(state='disabled')
     
     def log_message(self, message, tag=None):
         """ログにメッセージを追加"""
