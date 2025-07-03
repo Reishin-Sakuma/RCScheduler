@@ -12,6 +12,9 @@ import glob
 from datetime import timedelta
 import tempfile
 
+# バージョン情報
+VERSION = "1.0.0"
+
 class RobocopyScheduler:
     def __init__(self, root):
         self.root = root
