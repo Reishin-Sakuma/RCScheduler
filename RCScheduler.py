@@ -90,14 +90,14 @@ class RobocopyScheduler:
         style.configure('Modern.TLabelframe.Label',
                        background=self.colors['bg_secondary'],
                        foreground=self.colors['text_dark'],
-                       font=('Segoe UI', 10, 'bold'))
+                       font=('メイリオ', 10, 'bold'))
         
         style.configure('Modern.TFrame',
                        background=self.colors['bg_secondary'])
         
         # ボタンスタイル
         style.configure('Primary.TButton',
-                       font=('Segoe UI', 9),
+                       font=('メイリオ', 9),
                        padding=(12, 8),
                        background=self.colors['primary'],
                        foreground='white',
@@ -109,7 +109,7 @@ class RobocopyScheduler:
                            ('pressed', '#1e40af')])
         
         style.configure('Secondary.TButton',
-                       font=('Segoe UI', 9),
+                       font=('メイリオ', 9),
                        padding=(12, 8),
                        background=self.colors['secondary'],
                        foreground='white',
@@ -121,7 +121,7 @@ class RobocopyScheduler:
                            ('pressed', '#334155')])
         
         style.configure('Success.TButton',
-                       font=('Segoe UI', 9),
+                       font=('メイリオ', 9),
                        padding=(12, 8),
                        background=self.colors['success'],
                        foreground='white',
@@ -133,7 +133,7 @@ class RobocopyScheduler:
                            ('pressed', '#047857')])
         
         style.configure('Warning.TButton',
-                       font=('Segoe UI', 9),
+                       font=('メイリオ', 9),
                        padding=(12, 8),
                        background=self.colors['warning'],
                        foreground='white',
@@ -145,7 +145,7 @@ class RobocopyScheduler:
                            ('pressed', '#b45309')])
         
         style.configure('Danger.TButton',
-                       font=('Segoe UI', 9),
+                       font=('メイリオ', 9),
                        padding=(12, 8),
                        background=self.colors['danger'],
                        foreground='white',
@@ -163,7 +163,7 @@ class RobocopyScheduler:
                        relief='solid',
                        bordercolor=self.colors['border'],
                        padding=(8, 8),
-                       font=('Segoe UI', 9),
+                       font=('メイリオ', 9),
                        foreground=self.colors['text'])
         
         style.map('Modern.TEntry',
@@ -177,7 +177,7 @@ class RobocopyScheduler:
                        relief='solid',
                        bordercolor=self.colors['border'],
                        padding=(8, 8),
-                       font=('Segoe UI', 9),
+                       font=('メイリオ', 9),
                        foreground=self.colors['text'])
         
         style.map('Modern.TCombobox',
@@ -188,30 +188,30 @@ class RobocopyScheduler:
         style.configure('Modern.TLabel',
                        background=self.colors['bg_secondary'],
                        foreground=self.colors['text'],
-                       font=('Segoe UI', 9))
+                       font=('メイリオ', 9))
         
         style.configure('Title.TLabel',
                        background=self.colors['bg_secondary'],
                        foreground=self.colors['text_dark'],
-                       font=('Segoe UI', 18, 'bold'))
+                       font=('メイリオ', 18, 'bold'))
         
         style.configure('Subtitle.TLabel',
                        background=self.colors['bg_secondary'],
                        foreground=self.colors['text_muted'],
-                       font=('Segoe UI', 10))
+                       font=('メイリオ', 10))
         
         # チェックボタンスタイル（ダークテーマ）
         style.configure('Modern.TCheckbutton',
                        background=self.colors['bg_secondary'],
                        foreground=self.colors['text'],
-                       font=('Segoe UI', 9),
+                       font=('メイリオ', 9),
                        focuscolor='none')
         
         # ラジオボタンスタイル（ダークテーマ）
         style.configure('Modern.TRadiobutton',
                        background=self.colors['bg_secondary'],
                        foreground=self.colors['text'],
-                       font=('Segoe UI', 9),
+                       font=('メイリオ', 9),
                        focuscolor='none')
         
         # スピンボックススタイル（ダークテーマ）
@@ -221,7 +221,7 @@ class RobocopyScheduler:
                        relief='solid',
                        bordercolor=self.colors['border'],
                        padding=(8, 8),
-                       font=('Segoe UI', 9),
+                       font=('メイリオ', 9),
                        foreground=self.colors['text'])
         
         style.map('Modern.TSpinbox',
@@ -589,7 +589,7 @@ class RobocopyScheduler:
             frame.grid(row=row, column=col, sticky=tk.W, padx=15, pady=5)
             
             ttk.Checkbutton(frame, variable=self.option_vars[var_name], style='Modern.TCheckbutton').grid(row=0, column=0)
-            ttk.Label(frame, text=f"{option}", style='Modern.TLabel', font=('Segoe UI', 9, 'bold')).grid(row=0, column=1, padx=(8, 0), sticky=tk.W)
+            ttk.Label(frame, text=f"{option}", style='Modern.TLabel', font=('メイリオ', 9, 'bold')).grid(row=0, column=1, padx=(8, 0), sticky=tk.W)
             ttk.Label(frame, text=f"({description})", style='Subtitle.TLabel').grid(row=1, column=1, padx=(8, 0), sticky=tk.W)
         
         # リトライ・ログ設定フレーム
@@ -813,7 +813,7 @@ class RobocopyScheduler:
         self.log_text = tk.Text(log_frame, height=12, width=100, 
                               bg=self.colors['bg_tertiary'], fg=self.colors['text'], 
                               insertbackground=self.colors['text'], selectbackground=self.colors['primary'],
-                              font=('Consolas', 9), relief='solid', borderwidth=1)
+                              font=('メイリオ', 9), relief='solid', borderwidth=1)
         scrollbar = ttk.Scrollbar(log_frame, orient="vertical", command=self.log_text.yview)
         self.log_text.configure(yscrollcommand=scrollbar.set)
         self.log_text.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
