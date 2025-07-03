@@ -271,9 +271,28 @@ class RobocopyScheduler:
         # main_frameをscrollable_frameに変更
         main_frame = self.scrollable_frame
         
+        # ヘッダーセクション（プログラム名と説明）
+        header_frame = ttk.Frame(main_frame)
+        header_frame.grid(row=0, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 15))
+
+        # プログラム名
+        title_label = ttk.Label(header_frame, text="RCScheduler", 
+                            font=('', 16, 'bold'), foreground='#2c3e50')
+        title_label.grid(row=0, column=0, sticky=tk.W)
+
+        # プログラム説明
+        description_label = ttk.Label(header_frame, 
+                                    text="Windows用Robocopyスケジューラソフト - フォルダバックアップの自動化\nRobocopyの基本的なコマンド生成からタスクスケジューラ登録、メール通知設定まで一貫して行えます。", 
+                                    font=('', 9), foreground='#7f8c8d')
+        description_label.grid(row=1, column=0, sticky=tk.W, pady=(2, 0))
+
+        # 区切り線
+        separator = ttk.Separator(main_frame, orient='horizontal')
+        separator.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
+
         # Robocopy設定セクション
         robocopy_frame = ttk.LabelFrame(main_frame, text="Robocopy設定", padding="10")
-        robocopy_frame.grid(row=0, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
+        robocopy_frame.grid(row=2, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
         
         # コピー元フォルダ
         ttk.Label(robocopy_frame, text="コピー元フォルダ:").grid(row=0, column=0, sticky=tk.W)
@@ -486,7 +505,7 @@ class RobocopyScheduler:
         
         # メール設定セクション
         email_frame = ttk.LabelFrame(main_frame, text="メール通知設定", padding="10")
-        email_frame.grid(row=2, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
+        email_frame.grid(row=4, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
 
         # メール送信有効化チェックボックス
         self.email_enabled_var = tk.BooleanVar()
@@ -559,7 +578,7 @@ class RobocopyScheduler:
         
         # 制御ボタンセクション
         button_frame = ttk.Frame(main_frame)
-        button_frame.grid(row=3, column=0, columnspan=2, pady=20)
+        button_frame.grid(row=2, column=0, columnspan=2, pady=20)
 
         # 上段ボタン
         top_button_frame = ttk.Frame(button_frame)
@@ -583,11 +602,11 @@ class RobocopyScheduler:
         
         # タスクステータス表示
         status_frame = ttk.LabelFrame(main_frame, text="タスクステータス", padding="10")
-        status_frame.grid(row=4, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
+        status_frame.grid(row=6, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
 
         # タスク履歴設定セクション
         history_frame = ttk.LabelFrame(main_frame, text="タスク履歴設定", padding="10")
-        history_frame.grid(row=5, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
+        history_frame.grid(row=7, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
 
         # 履歴有効化チェックボックス
         self.history_enabled_var = tk.BooleanVar()
@@ -609,7 +628,7 @@ class RobocopyScheduler:
         
         # ログ表示エリア
         log_frame = ttk.LabelFrame(main_frame, text="実行ログ", padding="10")
-        log_frame.grid(row=6, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), pady=5)
+        log_frame.grid(row=8, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), pady=5)
         
         self.log_text = tk.Text(log_frame, height=12, width=100)
         scrollbar = ttk.Scrollbar(log_frame, orient="vertical", command=self.log_text.yview)
@@ -620,7 +639,7 @@ class RobocopyScheduler:
         # ステータスバー
         self.status_var = tk.StringVar(value="準備完了")
         status_bar = ttk.Label(main_frame, textvariable=self.status_var, relief=tk.SUNKEN)
-        status_bar.grid(row=7, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
+        status_bar.grid(row=9, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
 
         # 初期状態で曜日選択の有効/無効を設定
         self.update_weekday_state()
