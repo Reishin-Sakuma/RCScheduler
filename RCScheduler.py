@@ -450,7 +450,7 @@ class RobocopyScheduler:
         
         # スケジュール設定セクション
         schedule_frame = ttk.LabelFrame(main_frame, text="スケジュール設定", padding="10")
-        schedule_frame.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
+        schedule_frame.grid(row=3, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
         # タスク名設定（スケジュール設定の最後に追加）
         task_name_frame = ttk.Frame(schedule_frame)
         task_name_frame.grid(row=3, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
