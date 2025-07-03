@@ -180,3 +180,5 @@ robocopy_config.json
 *.bat
 *.ps1
 *.txt
+
+venv*
