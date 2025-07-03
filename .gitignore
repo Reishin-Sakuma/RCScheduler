@@ -182,3 +182,4 @@ robocopy_config.json
 *.txt
 
 venv*
+.claude
