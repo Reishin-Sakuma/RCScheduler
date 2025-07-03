@@ -18,7 +18,7 @@ VERSION = "1.0.0"
 class RobocopyScheduler:
     def __init__(self, root):
         self.root = root
-        self.root.title("Robocopy スケジューラ (Windows Task Scheduler)")
+        self.root.title(f"RCScheduler - ver.{VERSION}")
         self.root.geometry("800x950")  # 高さを少し増やす
         
         # 設定を保存するファイル名
