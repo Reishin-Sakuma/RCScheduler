@@ -581,7 +581,7 @@ class RobocopyScheduler:
         
         # 制御ボタンセクション
         button_frame = ttk.Frame(main_frame)
-        button_frame.grid(row=2, column=0, columnspan=2, pady=20)
+        button_frame.grid(row=5, column=0, columnspan=2, pady=20)
 
         # 上段ボタン
         top_button_frame = ttk.Frame(button_frame)
