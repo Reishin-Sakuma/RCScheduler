@@ -51,6 +51,7 @@ class RobocopyScheduler:
         self.source_auth_widgets = []
         self.dest_auth_widgets = []
         
+        
         self.create_widgets()
         self.load_config()
         self.update_task_status()
@@ -1408,11 +1409,12 @@ class RobocopyScheduler:
                 os.unlink(ps_script_path)
             except:
                 pass
-                            
+                
         except subprocess.TimeoutExpired:
             self.log_message("メール通知送信タイムアウト", "error")
         except Exception as e:
             self.log_message(f"メール送信エラー: {str(e)}", "error")
+    
     
     def run_now(self):
         """今すぐrobocopyを実行"""
@@ -1469,25 +1471,98 @@ class RobocopyScheduler:
                 weekday_code = self.get_weekday_code()
                 schedule_type = f"/SC WEEKLY /D {weekday_code}"
             
-            # schtasksコマンドを構築
-            cmd = f'''schtasks /CREATE /TN "{task_name}" /TR "\\"{batch_path}\\"" {schedule_type} /ST {start_time} /F'''
-            
+            # 管理者権限が必要な場合、UAC昇格を試行
             self.log_message("タスクスケジューラに登録中...")
-            result = subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding='cp932')
+            
+            # SYSTEM権限でのタスク作成コマンド
+            cmd_system = f'''schtasks /CREATE /TN "{task_name}" /TR "\\"{batch_path}\\"" {schedule_type} /ST {start_time} /RU "SYSTEM" /RL HIGHEST /F'''
+            self.log_message(f"実行コマンド: {cmd_system}")
+            
+            # 管理者権限チェック
+            if not self.is_admin():
+                self.log_message("管理者権限が必要です。UAC昇格を実行します...")
+                response = messagebox.askyesno("管理者権限が必要", 
+                    "SYSTEM権限でタスクを作成するには管理者権限が必要です。\n\n"
+                    "UAC（ユーザーアカウント制御）画面が表示されます。\n"
+                    "続行しますか？")
+                
+                if response:
+                    # UAC昇格してコマンドを実行
+                    if self.run_as_admin(cmd_system):
+                        self.log_message("UAC昇格によりタスクを作成しました")
+                        
+                        # 少し待ってからタスクの存在を確認
+                        import time
+                        time.sleep(2)
+                        
+                        # UAC昇格でタスク作成が完了
+                        self.log_message("UAC昇格によるタスク作成が完了しました")
+                        file_list = "\n".join([f"・{os.path.basename(f)}" for f in generated_files])
+                        messagebox.showinfo("成功", 
+                            f"スケジュールタスク '{task_name}' を作成しました\n\n"
+                            f"生成されたファイル:\n{file_list}\n\n"
+                            f"権限: SYSTEM（最上位権限）")
+                        self.update_task_status()
+                        return
+                    else:
+                        self.log_message("UAC昇格に失敗しました")
+                else:
+                    self.log_message("ユーザーがUAC昇格をキャンセルしました")
+                
+                # UAC処理後は以降の処理をスキップ
+                return
+            
+            # 1. 管理者権限でSYSTEM権限タスクを試行
+            result = subprocess.run(cmd_system, shell=True, capture_output=True, text=True, encoding='cp932')
             
             if result.returncode == 0:
-                self.log_message(f"タスクを作成しました: {task_name}")
+                self.log_message(f"タスクを作成しました（SYSTEM権限）: {task_name}")
                 self.log_message(f"実行ファイル: {batch_path}")
                 
                 file_list = "\n".join([f"・{os.path.basename(f)}" for f in generated_files])
                 messagebox.showinfo("成功", 
                     f"スケジュールタスク '{task_name}' を作成しました\n\n"
-                    f"生成されたファイル:\n{file_list}")
+                    f"生成されたファイル:\n{file_list}\n\n"
+                    f"権限: SYSTEM（最上位権限）")
                 self.update_task_status()
             else:
-                error_msg = f"タスク作成エラー: {result.stderr}"
-                self.log_message(error_msg, "error")
-                messagebox.showerror("エラー", error_msg)
+                # 2. SYSTEM権限で失敗した場合は現在のユーザーで試行
+                self.log_message("SYSTEM権限での作成に失敗。現在のユーザーで再試行中...")
+                cmd_user = f'''schtasks /CREATE /TN "{task_name}" /TR "\\"{batch_path}\\"" {schedule_type} /ST {start_time} /RL HIGHEST /F'''
+                result = subprocess.run(cmd_user, shell=True, capture_output=True, text=True, encoding='cp932')
+                
+                if result.returncode == 0:
+                    self.log_message(f"タスクを作成しました（現在のユーザー）: {task_name}")
+                    self.log_message(f"実行ファイル: {batch_path}")
+                    
+                    file_list = "\n".join([f"・{os.path.basename(f)}" for f in generated_files])
+                    messagebox.showinfo("成功", 
+                        f"スケジュールタスク '{task_name}' を作成しました\n\n"
+                        f"生成されたファイル:\n{file_list}\n\n"
+                        f"権限: 現在のユーザー（最上位権限）\n"
+                        f"注意: ログオフ時は実行されません")
+                    self.update_task_status()
+                else:
+                    # 3. 最上位権限も失敗した場合は通常権限で試行
+                    self.log_message("最上位権限での作成に失敗。通常権限で再試行中...")
+                    cmd_normal = f'''schtasks /CREATE /TN "{task_name}" /TR "\\"{batch_path}\\"" {schedule_type} /ST {start_time} /F'''
+                    result = subprocess.run(cmd_normal, shell=True, capture_output=True, text=True, encoding='cp932')
+                    
+                    if result.returncode == 0:
+                        self.log_message(f"タスクを作成しました（通常権限）: {task_name}")
+                        self.log_message(f"実行ファイル: {batch_path}")
+                        
+                        file_list = "\n".join([f"・{os.path.basename(f)}" for f in generated_files])
+                        messagebox.showinfo("成功", 
+                            f"スケジュールタスク '{task_name}' を作成しました\n\n"
+                            f"生成されたファイル:\n{file_list}\n\n"
+                            f"権限: 現在のユーザー（制限付き）\n"
+                            f"注意: ログオフ時は実行されません")
+                        self.update_task_status()
+                    else:
+                        error_msg = f"タスク作成エラー: {result.stderr}"
+                        self.log_message(error_msg, "error")
+                        messagebox.showerror("エラー", error_msg)
                 
         except Exception as e:
             error_msg = f"タスク作成エラー: {str(e)}"
