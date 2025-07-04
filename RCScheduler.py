@@ -20,6 +20,7 @@ class RobocopyScheduler:
         self.root.title(f"RCScheduler - ver.{VERSION}")
         self.root.geometry("900x1000")
         
+        
         # モダンなスタイル設定
         self.setup_modern_style()
         
@@ -55,6 +56,34 @@ class RobocopyScheduler:
         self.create_widgets()
         self.load_config()
         self.update_task_status()
+        
+        # 起動後に管理者権限をチェックしてメッセージ表示
+        self.root.after(100, self.check_admin_status)
+    
+    def check_admin_status(self):
+        """管理者権限の状態をチェックしてメッセージ表示"""
+        if self.is_admin():
+            # 管理者権限で起動している場合
+            self.log_message("管理者権限で起動しています - 全機能が利用可能です")
+            messagebox.showinfo(
+                "管理者権限で起動",
+                "RCSchedulerが管理者権限で起動しました。\n\n"
+                "✅ SYSTEM権限でのタスク作成\n"
+                "✅ タスクステータスの確認\n"
+                "✅ すべての機能が利用可能です"
+            )
+        else:
+            # 一般権限で起動している場合
+            self.log_message("一般権限で起動しています - 管理者権限が必要です")
+            messagebox.showerror(
+                "管理者権限が必要",
+                "RCSchedulerは管理者権限での起動が必要です。\n\n"
+                "SYSTEM権限でのタスク作成には管理者権限が必須です。\n\n"
+                "次回はプログラムを右クリック→「管理者として実行」で起動してください。"
+            )
+            # プログラムを終了
+            self.log_message("管理者権限なしのため終了します")
+            self.root.quit()
     
     def setup_modern_style(self):
         """モダンなスタイルを設定"""
@@ -1478,41 +1507,7 @@ class RobocopyScheduler:
             cmd_system = f'''schtasks /CREATE /TN "{task_name}" /TR "\\"{batch_path}\\"" {schedule_type} /ST {start_time} /RU "SYSTEM" /RL HIGHEST /F'''
             self.log_message(f"実行コマンド: {cmd_system}")
             
-            # 管理者権限チェック
-            if not self.is_admin():
-                self.log_message("管理者権限が必要です。UAC昇格を実行します...")
-                response = messagebox.askyesno("管理者権限が必要", 
-                    "SYSTEM権限でタスクを作成するには管理者権限が必要です。\n\n"
-                    "UAC（ユーザーアカウント制御）画面が表示されます。\n"
-                    "続行しますか？")
-                
-                if response:
-                    # UAC昇格してコマンドを実行
-                    if self.run_as_admin(cmd_system):
-                        self.log_message("UAC昇格によりタスクを作成しました")
-                        
-                        # 少し待ってからタスクの存在を確認
-                        import time
-                        time.sleep(2)
-                        
-                        # UAC昇格でタスク作成が完了
-                        self.log_message("UAC昇格によるタスク作成が完了しました")
-                        file_list = "\n".join([f"・{os.path.basename(f)}" for f in generated_files])
-                        messagebox.showinfo("成功", 
-                            f"スケジュールタスク '{task_name}' を作成しました\n\n"
-                            f"生成されたファイル:\n{file_list}\n\n"
-                            f"権限: SYSTEM（最上位権限）")
-                        self.update_task_status()
-                        return
-                    else:
-                        self.log_message("UAC昇格に失敗しました")
-                else:
-                    self.log_message("ユーザーがUAC昇格をキャンセルしました")
-                
-                # UAC処理後は以降の処理をスキップ
-                return
-            
-            # 1. 管理者権限でSYSTEM権限タスクを試行
+            # SYSTEM権限でタスクを作成
             result = subprocess.run(cmd_system, shell=True, capture_output=True, text=True, encoding='cp932')
             
             if result.returncode == 0:
@@ -1526,43 +1521,15 @@ class RobocopyScheduler:
                     f"権限: SYSTEM（最上位権限）")
                 self.update_task_status()
             else:
-                # 2. SYSTEM権限で失敗した場合は現在のユーザーで試行
-                self.log_message("SYSTEM権限での作成に失敗。現在のユーザーで再試行中...")
-                cmd_user = f'''schtasks /CREATE /TN "{task_name}" /TR "\\"{batch_path}\\"" {schedule_type} /ST {start_time} /RL HIGHEST /F'''
-                result = subprocess.run(cmd_user, shell=True, capture_output=True, text=True, encoding='cp932')
-                
-                if result.returncode == 0:
-                    self.log_message(f"タスクを作成しました（現在のユーザー）: {task_name}")
-                    self.log_message(f"実行ファイル: {batch_path}")
-                    
-                    file_list = "\n".join([f"・{os.path.basename(f)}" for f in generated_files])
-                    messagebox.showinfo("成功", 
-                        f"スケジュールタスク '{task_name}' を作成しました\n\n"
-                        f"生成されたファイル:\n{file_list}\n\n"
-                        f"権限: 現在のユーザー（最上位権限）\n"
-                        f"注意: ログオフ時は実行されません")
-                    self.update_task_status()
+                error_msg = f"タスク作成エラー: {result.stderr}"
+                self.log_message(error_msg, "error")
+                if "アクセスが拒否されました" in result.stderr:
+                    messagebox.showerror("権限エラー", 
+                        f"SYSTEM権限でのタスク作成に失敗しました。\n\n"
+                        f"管理者権限でプログラムを起動してください。\n\n"
+                        f"エラー: {result.stderr}")
                 else:
-                    # 3. 最上位権限も失敗した場合は通常権限で試行
-                    self.log_message("最上位権限での作成に失敗。通常権限で再試行中...")
-                    cmd_normal = f'''schtasks /CREATE /TN "{task_name}" /TR "\\"{batch_path}\\"" {schedule_type} /ST {start_time} /F'''
-                    result = subprocess.run(cmd_normal, shell=True, capture_output=True, text=True, encoding='cp932')
-                    
-                    if result.returncode == 0:
-                        self.log_message(f"タスクを作成しました（通常権限）: {task_name}")
-                        self.log_message(f"実行ファイル: {batch_path}")
-                        
-                        file_list = "\n".join([f"・{os.path.basename(f)}" for f in generated_files])
-                        messagebox.showinfo("成功", 
-                            f"スケジュールタスク '{task_name}' を作成しました\n\n"
-                            f"生成されたファイル:\n{file_list}\n\n"
-                            f"権限: 現在のユーザー（制限付き）\n"
-                            f"注意: ログオフ時は実行されません")
-                        self.update_task_status()
-                    else:
-                        error_msg = f"タスク作成エラー: {result.stderr}"
-                        self.log_message(error_msg, "error")
-                        messagebox.showerror("エラー", error_msg)
+                    messagebox.showerror("エラー", error_msg)
                 
         except Exception as e:
             error_msg = f"タスク作成エラー: {str(e)}"
@@ -1657,12 +1624,18 @@ class RobocopyScheduler:
             return
             
         cmd = f'schtasks /QUERY /TN "{task_name}"'
+        self.log_message(f"タスクステータス確認: {cmd}")
         
         try:
             result = subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding='cp932')
             
+            self.log_message(f"ステータス確認結果 returncode: {result.returncode}")
+            if result.stderr:
+                self.log_message(f"ステータス確認エラー: {result.stderr}")
+            
             if result.returncode == 0:
                 # タスクが存在する場合
+                self.log_message(f"タスク確認成功: {task_name}")
                 lines = result.stdout.split('\n')
                 for line in lines:
                     if 'Next Run Time' in line or '次回の実行時刻' in line:
@@ -1672,10 +1645,15 @@ class RobocopyScheduler:
                 
                 self.task_status_var.set("タスク登録済み")
             else:
-                self.task_status_var.set("タスク未登録")
+                self.log_message(f"タスクが見つかりません: {task_name}")
+                if "アクセスが拒否されました" in result.stderr:
+                    self.task_status_var.set("権限不足（管理者として起動してください）")
+                else:
+                    self.task_status_var.set("タスク未登録")
                 
         except Exception as e:
             self.task_status_var.set(f"ステータス確認エラー: {str(e)}")
+            self.log_message(f"ステータス確認例外: {str(e)}", "error")
     
     def save_config(self):
         """設定をファイルに保存"""
