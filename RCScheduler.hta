@@ -677,6 +677,24 @@
         <div class="section-title">📝 ログ</div>
         <textarea class="log-area" id="logArea" readonly></textarea>
     </div>
+
+    <!-- タスク履歴設定 -->
+    <div class="section">
+        <div class="section-title">📋 タスク履歴設定</div>
+        <p class="text-small" style="margin-bottom: 15px;">
+            Windowsタスクスケジューラのイベントログ機能を管理します。<br>
+            ※この操作には管理者権限が必要です。
+        </p>
+        <div class="status-bar">
+            <span class="status-label">現在の履歴設定: </span>
+            <span class="status-value" id="taskHistoryStatus">確認中...</span>
+        </div>
+        <div class="action-buttons" style="margin-top: 15px;">
+            <button class="btn-success" onclick="enableTaskHistory()">履歴を有効化</button>
+            <button class="btn-warning" onclick="disableTaskHistory()">履歴を無効化</button>
+            <button class="btn-secondary" onclick="getTaskHistoryStatus()">現在の設定確認</button>
+        </div>
+    </div>
 </div>
 
 <script type="text/javascript">
@@ -719,6 +737,9 @@ window.onload = function() {
 
     // タスクステータスを更新
     updateTaskStatus();
+
+    // タスク履歴の設定状態を確認（起動時）
+    getTaskHistoryStatus(true); // true = サイレントモード
 
     // イベントリスナー設定
     setupEventListeners();
@@ -1970,6 +1991,210 @@ function updateTaskStatus() {
     } catch(e) {
         document.getElementById('taskStatus').innerText = "確認エラー";
         logMessage("タスクステータス確認エラー: " + e.message, "error");
+    }
+}
+
+// ======================================
+// タスク履歴設定機能
+// ======================================
+
+function enableTaskHistory() {
+    if (!isAdmin()) {
+        alert("タスク履歴の有効化には管理者権限が必要です。");
+        return { success: false, message: "管理者権限が必要です" };
+    }
+
+    try {
+        logMessage("タスク履歴を有効化しています...");
+
+        var cmd = 'wevtutil set-log Microsoft-Windows-TaskScheduler/Operational /enabled:true';
+
+        // コマンド実行
+        var tempOutput = fso.BuildPath(fso.GetSpecialFolder(2), "rcscheduler_history_output.txt");
+        var tempError = fso.BuildPath(fso.GetSpecialFolder(2), "rcscheduler_history_error.txt");
+
+        var cmdFull = 'cmd.exe /c ' + cmd + ' > "' + tempOutput + '" 2> "' + tempError + '"';
+        var exitCode = shell.Run(cmdFull, 0, true);
+
+        // エラー出力を読み取り
+        var error = "";
+        if (fso.FileExists(tempError)) {
+            var fileObj = fso.GetFile(tempError);
+            if (fileObj.Size > 0) {
+                var errFile = fso.OpenTextFile(tempError, 1);
+                error = errFile.ReadAll();
+                errFile.Close();
+            }
+            fso.DeleteFile(tempError);
+        }
+
+        // 出力ファイルのクリーンアップ
+        if (fso.FileExists(tempOutput)) {
+            fso.DeleteFile(tempOutput);
+        }
+
+        if (exitCode === 0) {
+            logMessage("タスク履歴を有効化しました", "success");
+            document.getElementById('taskHistoryStatus').innerText = "有効";
+            alert("タスク履歴を有効化しました。");
+            return { success: true, message: "有効化しました" };
+        } else {
+            logMessage("タスク履歴の有効化に失敗しました: " + error, "error");
+            alert("タスク履歴の有効化に失敗しました。\n\n" + error);
+            return { success: false, message: error };
+        }
+
+    } catch(e) {
+        logMessage("タスク履歴有効化エラー: " + e.message, "error");
+        alert("タスク履歴有効化エラー: " + e.message);
+        return { success: false, message: e.message };
+    }
+}
+
+function disableTaskHistory() {
+    if (!isAdmin()) {
+        alert("タスク履歴の無効化には管理者権限が必要です。");
+        return { success: false, message: "管理者権限が必要です" };
+    }
+
+    if (!confirm("タスク履歴を無効化してもよろしいですか？\n\n※既存の履歴は保持されますが、新しい履歴は記録されなくなります。")) {
+        return { success: false, message: "キャンセルされました" };
+    }
+
+    try {
+        logMessage("タスク履歴を無効化しています...");
+
+        var cmd = 'wevtutil set-log Microsoft-Windows-TaskScheduler/Operational /enabled:false';
+
+        // コマンド実行
+        var tempOutput = fso.BuildPath(fso.GetSpecialFolder(2), "rcscheduler_history_output.txt");
+        var tempError = fso.BuildPath(fso.GetSpecialFolder(2), "rcscheduler_history_error.txt");
+
+        var cmdFull = 'cmd.exe /c ' + cmd + ' > "' + tempOutput + '" 2> "' + tempError + '"';
+        var exitCode = shell.Run(cmdFull, 0, true);
+
+        // エラー出力を読み取り
+        var error = "";
+        if (fso.FileExists(tempError)) {
+            var fileObj = fso.GetFile(tempError);
+            if (fileObj.Size > 0) {
+                var errFile = fso.OpenTextFile(tempError, 1);
+                error = errFile.ReadAll();
+                errFile.Close();
+            }
+            fso.DeleteFile(tempError);
+        }
+
+        // 出力ファイルのクリーンアップ
+        if (fso.FileExists(tempOutput)) {
+            fso.DeleteFile(tempOutput);
+        }
+
+        if (exitCode === 0) {
+            logMessage("タスク履歴を無効化しました", "success");
+            document.getElementById('taskHistoryStatus').innerText = "無効";
+            alert("タスク履歴を無効化しました。");
+            return { success: true, message: "無効化しました" };
+        } else {
+            logMessage("タスク履歴の無効化に失敗しました: " + error, "error");
+            alert("タスク履歴の無効化に失敗しました。\n\n" + error);
+            return { success: false, message: error };
+        }
+
+    } catch(e) {
+        logMessage("タスク履歴無効化エラー: " + e.message, "error");
+        alert("タスク履歴無効化エラー: " + e.message);
+        return { success: false, message: e.message };
+    }
+}
+
+function getTaskHistoryStatus(silent) {
+    // silent = trueの場合、アラートを表示しない（起動時用）
+    silent = silent || false;
+
+    try {
+        if (!silent) {
+            logMessage("タスク履歴の設定状態を確認しています...");
+        }
+
+        var cmd = 'wevtutil get-log Microsoft-Windows-TaskScheduler/Operational';
+
+        // コマンド実行
+        var tempOutput = fso.BuildPath(fso.GetSpecialFolder(2), "rcscheduler_history_status.txt");
+        var tempError = fso.BuildPath(fso.GetSpecialFolder(2), "rcscheduler_history_status_error.txt");
+
+        var cmdFull = 'cmd.exe /c ' + cmd + ' > "' + tempOutput + '" 2> "' + tempError + '"';
+        var exitCode = shell.Run(cmdFull, 0, true);
+
+        // 出力を読み取り
+        var output = "";
+        if (fso.FileExists(tempOutput)) {
+            var fileObj = fso.GetFile(tempOutput);
+            if (fileObj.Size > 0) {
+                var outFile = fso.OpenTextFile(tempOutput, 1);
+                output = outFile.ReadAll();
+                outFile.Close();
+            }
+            fso.DeleteFile(tempOutput);
+        }
+
+        // エラー出力を読み取り
+        var error = "";
+        if (fso.FileExists(tempError)) {
+            var errFileObj = fso.GetFile(tempError);
+            if (errFileObj.Size > 0) {
+                var errFile = fso.OpenTextFile(tempError, 1);
+                error = errFile.ReadAll();
+                errFile.Close();
+            }
+            fso.DeleteFile(tempError);
+        }
+
+        if (exitCode === 0 && output) {
+            // 出力から enabled 状態を解析
+            var lines = output.split("\n");
+            var enabled = false;
+
+            for (var i = 0; i < lines.length; i++) {
+                var line = lines[i].trim();
+                // "enabled: true" または "enabled: false" の形式を探す
+                if (line.toLowerCase().indexOf("enabled:") !== -1) {
+                    if (line.toLowerCase().indexOf("true") !== -1) {
+                        enabled = true;
+                    }
+                    break;
+                }
+            }
+
+            var statusText = enabled ? "有効" : "無効";
+            document.getElementById('taskHistoryStatus').innerText = statusText;
+
+            if (!silent) {
+                logMessage("タスク履歴の設定状態: " + statusText, "success");
+                alert("タスク履歴の設定状態: " + statusText);
+            }
+
+            return { enabled: enabled, message: statusText };
+        } else {
+            document.getElementById('taskHistoryStatus').innerText = "確認エラー";
+
+            if (!silent) {
+                logMessage("タスク履歴の設定状態の確認に失敗しました: " + error, "error");
+                alert("タスク履歴の設定状態の確認に失敗しました。\n\n" + error);
+            }
+
+            return { enabled: null, message: error };
+        }
+
+    } catch(e) {
+        document.getElementById('taskHistoryStatus').innerText = "確認エラー";
+
+        if (!silent) {
+            logMessage("タスク履歴設定状態確認エラー: " + e.message, "error");
+            alert("タスク履歴設定状態確認エラー: " + e.message);
+        }
+
+        return { enabled: null, message: e.message };
     }
 }
 
