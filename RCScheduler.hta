@@ -646,7 +646,10 @@
             </div>
 
             <!-- SMTP接続テスト -->
-            <button class="btn-primary btn-small" onclick="testSmtpConnection()">SMTP接続テスト</button>
+            <div class="action-buttons">
+                <button class="btn-primary btn-small" onclick="testSmtpConnection()">SMTP接続テスト</button>
+                <button class="btn-success btn-small" onclick="sendTestMail()">メールテスト送信</button>
+            </div>
         </div>
     </div>
 
@@ -2444,6 +2447,364 @@ function testSmtpConnection() {
     } catch(e) {
         logMessage("SMTP接続テストエラー: " + e.message, "error");
         alert("SMTP接続テストでエラーが発生しました。\n\n" + e.message);
+    }
+}
+
+// ======================================
+// メールテスト送信
+// ======================================
+
+function sendTestMail() {
+    var smtpServer = document.getElementById('smtpServer').value.trim();
+    var smtpPort = document.getElementById('smtpPort').value.trim();
+    var senderEmail = document.getElementById('senderEmail').value.trim();
+    var senderPassword = document.getElementById('senderPassword').value.trim();
+    var recipientEmail = document.getElementById('recipientEmail').value.trim();
+
+    // 入力検証
+    if (!smtpServer) {
+        alert("SMTPサーバーを入力してください。");
+        return;
+    }
+
+    if (!smtpPort) {
+        alert("ポート番号を入力してください。");
+        return;
+    }
+
+    if (!senderEmail) {
+        alert("送信者メールアドレスを入力してください。");
+        return;
+    }
+
+    if (!senderPassword) {
+        alert("送信者パスワードを入力してください。");
+        return;
+    }
+
+    if (!recipientEmail) {
+        alert("受信者メールアドレスを入力してください。");
+        return;
+    }
+
+    // ポート番号の検証
+    var portNum = parseInt(smtpPort, 10);
+    if (isNaN(portNum) || portNum < 1 || portNum > 65535) {
+        alert("有効なポート番号を入力してください（1-65535）");
+        return;
+    }
+
+    if (!confirm("テストメールを送信しますか？\n\n送信先: " + recipientEmail)) {
+        return;
+    }
+
+    try {
+        logMessage("テストメールを送信しています...");
+
+        // 設定値を取得
+        var connectionSecurity = document.getElementById('connectionSecurity').value;
+        var authMethod = document.getElementById('authMethod').value;
+        var useSSL = connectionSecurity === "SSL/TLS";
+        var useSTARTTLS = connectionSecurity === "STARTTLS";
+
+        // 現在の日時を取得
+        var now = new Date();
+        var dateTimeStr = now.getFullYear() + "年" +
+                          (now.getMonth() + 1) + "月" +
+                          now.getDate() + "日 " +
+                          now.getHours() + ":" +
+                          ("0" + now.getMinutes()).slice(-2) + ":" +
+                          ("0" + now.getSeconds()).slice(-2);
+
+        // テストメール用PowerShellスクリプトを生成
+        var psScript = "# RCScheduler テストメール送信\r\n";
+        psScript += "$ErrorActionPreference = \"Stop\"\r\n\r\n";
+
+        psScript += "# 設定\r\n";
+        psScript += "$SmtpServer = \"" + escapePowerShellString(smtpServer) + "\"\r\n";
+        psScript += "$SmtpPort = " + smtpPort + "\r\n";
+        psScript += "$SenderEmail = \"" + escapePowerShellString(senderEmail) + "\"\r\n";
+        psScript += "$SenderPassword = \"" + escapePowerShellString(senderPassword) + "\"\r\n";
+        psScript += "$RecipientEmail = \"" + escapePowerShellString(recipientEmail) + "\"\r\n";
+        psScript += "$UseSSL = " + (useSSL ? "$true" : "$false") + "\r\n";
+        psScript += "$UseSTARTTLS = " + (useSTARTTLS ? "$true" : "$false") + "\r\n";
+        psScript += "$AuthMethod = \"" + authMethod + "\"\r\n\r\n";
+
+        psScript += "# メール内容\r\n";
+        psScript += "$Subject = \"[テスト] RCScheduler メール送信テスト\"\r\n";
+        psScript += "$Body = @\"\r\n";
+        psScript += "RCScheduler メール送信テスト\r\n";
+        psScript += "=" + "=".repeat(40) + "\r\n\r\n";
+        psScript += "送信日時: " + dateTimeStr + "\r\n\r\n";
+        psScript += "SMTP設定情報:\r\n";
+        psScript += "- SMTPサーバー: " + smtpServer + "\r\n";
+        psScript += "- ポート番号: " + smtpPort + "\r\n";
+        psScript += "- 接続の保護: " + connectionSecurity + "\r\n";
+        psScript += "- 認証方式: " + authMethod + "\r\n";
+        psScript += "- 送信元: " + senderEmail + "\r\n";
+        psScript += "- 宛先: " + recipientEmail + "\r\n\r\n";
+        psScript += "このメールは RCScheduler のメール送信機能のテストです。\r\n";
+        psScript += "正常に受信できていれば、メール送信機能が正しく動作しています。\r\n";
+        psScript += "\"@\r\n\r\n";
+
+        // Base64エンコード関数
+        psScript += "function ConvertTo-Base64($text) {\r\n";
+        psScript += "    $bytes = [System.Text.Encoding]::UTF8.GetBytes($text)\r\n";
+        psScript += "    return [System.Convert]::ToBase64String($bytes)\r\n";
+        psScript += "}\r\n\r\n";
+
+        // 認証コマンド送信関数（generateMailScript関数から引用）
+        psScript += "function Send-AuthCommand($writer, $reader, $authMethod, $username, $password) {\r\n";
+        psScript += "    switch ($authMethod) {\r\n";
+        psScript += "        \"CRAM-MD5\" {\r\n";
+        psScript += "            $writer.WriteLine(\"AUTH CRAM-MD5\")\r\n";
+        psScript += "            $writer.Flush()\r\n";
+        psScript += "            $response = $reader.ReadLine()\r\n";
+        psScript += "            \r\n";
+        psScript += "            if ($response.StartsWith(\"334\")) {\r\n";
+        psScript += "                $challenge = $response.Substring(4)\r\n";
+        psScript += "                $challengeBytes = [System.Convert]::FromBase64String($challenge)\r\n";
+        psScript += "                $challengeText = [System.Text.Encoding]::UTF8.GetString($challengeBytes)\r\n";
+        psScript += "                \r\n";
+        psScript += "                $hmac = New-Object System.Security.Cryptography.HMACMD5\r\n";
+        psScript += "                $hmac.Key = [System.Text.Encoding]::UTF8.GetBytes($password)\r\n";
+        psScript += "                $hash = $hmac.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($challengeText))\r\n";
+        psScript += "                $hashHex = [System.BitConverter]::ToString($hash) -replace \"-\", \"\"\r\n";
+        psScript += "                \r\n";
+        psScript += "                $cramResponse = \"$username \" + $hashHex.ToLower()\r\n";
+        psScript += "                $encodedResponse = ConvertTo-Base64 $cramResponse\r\n";
+        psScript += "                $writer.WriteLine($encodedResponse)\r\n";
+        psScript += "                $writer.Flush()\r\n";
+        psScript += "            }\r\n";
+        psScript += "        }\r\n";
+        psScript += "        \"LOGIN\" {\r\n";
+        psScript += "            $writer.WriteLine(\"AUTH LOGIN\")\r\n";
+        psScript += "            $writer.Flush()\r\n";
+        psScript += "            $response = $reader.ReadLine()\r\n";
+        psScript += "            if ($response.StartsWith(\"334\")) {\r\n";
+        psScript += "                $writer.WriteLine((ConvertTo-Base64 $username))\r\n";
+        psScript += "                $writer.Flush()\r\n";
+        psScript += "                $response = $reader.ReadLine()\r\n";
+        psScript += "                if ($response.StartsWith(\"334\")) {\r\n";
+        psScript += "                    $writer.WriteLine((ConvertTo-Base64 $password))\r\n";
+        psScript += "                    $writer.Flush()\r\n";
+        psScript += "                }\r\n";
+        psScript += "            }\r\n";
+        psScript += "        }\r\n";
+        psScript += "        \"PLAIN\" {\r\n";
+        psScript += "            $plainAuth = \"`0\" + $username + \"`0\" + $password\r\n";
+        psScript += "            $encodedAuth = ConvertTo-Base64 $plainAuth\r\n";
+        psScript += "            $writer.WriteLine(\"AUTH PLAIN $encodedAuth\")\r\n";
+        psScript += "            $writer.Flush()\r\n";
+        psScript += "        }\r\n";
+        psScript += "    }\r\n";
+        psScript += "}\r\n\r\n";
+
+        // メール送信処理
+        psScript += "try {\r\n";
+        psScript += "    Write-Output \"メール送信開始...\"\r\n";
+        psScript += "    \r\n";
+        psScript += "    # TCP接続\r\n";
+        psScript += "    $tcpClient = New-Object System.Net.Sockets.TcpClient\r\n";
+        psScript += "    $tcpClient.ReceiveTimeout = 30000\r\n";
+        psScript += "    $tcpClient.SendTimeout = 30000\r\n";
+        psScript += "    \r\n";
+        psScript += "    if ($UseSSL) {\r\n";
+        psScript += "        Write-Output \"SSL/TLS接続でサーバーに接続中...\"\r\n";
+        psScript += "        $tcpClient.Connect($SmtpServer, $SmtpPort)\r\n";
+        psScript += "        $sslStream = New-Object System.Net.Security.SslStream($tcpClient.GetStream(), $false)\r\n";
+        psScript += "        $sslStream.AuthenticateAsClient($SmtpServer)\r\n";
+        psScript += "        $stream = $sslStream\r\n";
+        psScript += "    } else {\r\n";
+        psScript += "        Write-Output \"平文接続でサーバーに接続中...\"\r\n";
+        psScript += "        $tcpClient.Connect($SmtpServer, $SmtpPort)\r\n";
+        psScript += "        $stream = $tcpClient.GetStream()\r\n";
+        psScript += "    }\r\n";
+        psScript += "    \r\n";
+        psScript += "    $reader = New-Object System.IO.StreamReader($stream)\r\n";
+        psScript += "    $writer = New-Object System.IO.StreamWriter($stream)\r\n";
+        psScript += "    $writer.AutoFlush = $true\r\n";
+        psScript += "    \r\n";
+        psScript += "    # サーバーの応答を待つ\r\n";
+        psScript += "    $response = $reader.ReadLine()\r\n";
+        psScript += "    Write-Output \"サーバー応答: $response\"\r\n";
+        psScript += "    \r\n";
+        psScript += "    # EHLO\r\n";
+        psScript += "    $writer.WriteLine(\"EHLO localhost\")\r\n";
+        psScript += "    $response = $reader.ReadLine()\r\n";
+        psScript += "    Write-Output \"EHLO応答: $response\"\r\n";
+        psScript += "    \r\n";
+        psScript += "    # 追加の応答を読み取る\r\n";
+        psScript += "    while ($response -match \"^250-\") {\r\n";
+        psScript += "        $response = $reader.ReadLine()\r\n";
+        psScript += "    }\r\n";
+        psScript += "    \r\n";
+        psScript += "    # STARTTLS処理\r\n";
+        psScript += "    if ($UseSTARTTLS) {\r\n";
+        psScript += "        Write-Output \"STARTTLS開始...\"\r\n";
+        psScript += "        $writer.WriteLine(\"STARTTLS\")\r\n";
+        psScript += "        $response = $reader.ReadLine()\r\n";
+        psScript += "        Write-Output \"STARTTLS応答: $response\"\r\n";
+        psScript += "        \r\n";
+        psScript += "        if ($response.StartsWith(\"220\")) {\r\n";
+        psScript += "            $sslStream = New-Object System.Net.Security.SslStream($stream, $false)\r\n";
+        psScript += "            $sslStream.AuthenticateAsClient($SmtpServer)\r\n";
+        psScript += "            $stream = $sslStream\r\n";
+        psScript += "            $reader = New-Object System.IO.StreamReader($stream)\r\n";
+        psScript += "            $writer = New-Object System.IO.StreamWriter($stream)\r\n";
+        psScript += "            $writer.AutoFlush = $true\r\n";
+        psScript += "            \r\n";
+        psScript += "            # STARTTLS後に再度EHLO\r\n";
+        psScript += "            $writer.WriteLine(\"EHLO localhost\")\r\n";
+        psScript += "            $response = $reader.ReadLine()\r\n";
+        psScript += "            while ($response -match \"^250-\") {\r\n";
+        psScript += "                $response = $reader.ReadLine()\r\n";
+        psScript += "            }\r\n";
+        psScript += "        }\r\n";
+        psScript += "    }\r\n";
+        psScript += "    \r\n";
+        psScript += "    # 認証\r\n";
+        psScript += "    Write-Output \"認証中 ($AuthMethod)...\"\r\n";
+        psScript += "    Send-AuthCommand $writer $reader $AuthMethod $SenderEmail $SenderPassword\r\n";
+        psScript += "    $response = $reader.ReadLine()\r\n";
+        psScript += "    Write-Output \"認証応答: $response\"\r\n";
+        psScript += "    \r\n";
+        psScript += "    if (-not $response.StartsWith(\"235\")) {\r\n";
+        psScript += "        throw \"認証失敗: $response\"\r\n";
+        psScript += "    }\r\n";
+        psScript += "    \r\n";
+        psScript += "    # MAIL FROM\r\n";
+        psScript += "    $writer.WriteLine(\"MAIL FROM:<$SenderEmail>\")\r\n";
+        psScript += "    $response = $reader.ReadLine()\r\n";
+        psScript += "    Write-Output \"MAIL FROM応答: $response\"\r\n";
+        psScript += "    \r\n";
+        psScript += "    # RCPT TO\r\n";
+        psScript += "    $writer.WriteLine(\"RCPT TO:<$RecipientEmail>\")\r\n";
+        psScript += "    $response = $reader.ReadLine()\r\n";
+        psScript += "    Write-Output \"RCPT TO応答: $response\"\r\n";
+        psScript += "    \r\n";
+        psScript += "    # DATA\r\n";
+        psScript += "    $writer.WriteLine(\"DATA\")\r\n";
+        psScript += "    $response = $reader.ReadLine()\r\n";
+        psScript += "    Write-Output \"DATA応答: $response\"\r\n";
+        psScript += "    \r\n";
+        psScript += "    # メールヘッダーと本文\r\n";
+        psScript += "    $writer.WriteLine(\"From: <$SenderEmail>\")\r\n";
+        psScript += "    $writer.WriteLine(\"To: <$RecipientEmail>\")\r\n";
+        psScript += "    $writer.WriteLine(\"Subject: =?UTF-8?B?\" + (ConvertTo-Base64 $Subject) + \"?=\")\r\n";
+        psScript += "    $writer.WriteLine(\"Content-Type: text/plain; charset=UTF-8\")\r\n";
+        psScript += "    $writer.WriteLine(\"Content-Transfer-Encoding: base64\")\r\n";
+        psScript += "    $writer.WriteLine(\"\")\r\n";
+        psScript += "    \r\n";
+        psScript += "    # 本文をBase64エンコード\r\n";
+        psScript += "    $bodyBytes = [System.Text.Encoding]::UTF8.GetBytes($Body)\r\n";
+        psScript += "    $bodyBase64 = [System.Convert]::ToBase64String($bodyBytes)\r\n";
+        psScript += "    $writer.WriteLine($bodyBase64)\r\n";
+        psScript += "    $writer.WriteLine(\".\")\r\n";
+        psScript += "    $response = $reader.ReadLine()\r\n";
+        psScript += "    Write-Output \"送信応答: $response\"\r\n";
+        psScript += "    \r\n";
+        psScript += "    if ($response.StartsWith(\"250\")) {\r\n";
+        psScript += "        Write-Output \"メール送信成功\"\r\n";
+        psScript += "    } else {\r\n";
+        psScript += "        throw \"メール送信失敗: $response\"\r\n";
+        psScript += "    }\r\n";
+        psScript += "    \r\n";
+        psScript += "    # QUIT\r\n";
+        psScript += "    $writer.WriteLine(\"QUIT\")\r\n";
+        psScript += "    $response = $reader.ReadLine()\r\n";
+        psScript += "    \r\n";
+        psScript += "    # クリーンアップ\r\n";
+        psScript += "    $writer.Close()\r\n";
+        psScript += "    $reader.Close()\r\n";
+        psScript += "    $stream.Close()\r\n";
+        psScript += "    $tcpClient.Close()\r\n";
+        psScript += "    \r\n";
+        psScript += "    exit 0\r\n";
+        psScript += "    \r\n";
+        psScript += "} catch {\r\n";
+        psScript += "    Write-Error \"エラー: $_\"\r\n";
+        psScript += "    exit 1\r\n";
+        psScript += "}\r\n";
+
+        // 一時PowerShellスクリプトを保存
+        var tempPsPath = fso.BuildPath(fso.GetSpecialFolder(2), "rcscheduler_test_mail.ps1");
+        var psFile = fso.CreateTextFile(tempPsPath, true);
+        psFile.Write(psScript);
+        psFile.Close();
+
+        logMessage("PowerShellスクリプトを生成しました: " + tempPsPath);
+
+        // PowerShellスクリプトを実行
+        var tempOutput = fso.BuildPath(fso.GetSpecialFolder(2), "rcscheduler_test_mail_output.txt");
+        var tempError = fso.BuildPath(fso.GetSpecialFolder(2), "rcscheduler_test_mail_error.txt");
+
+        var psCmd = 'powershell.exe -ExecutionPolicy Bypass -NoProfile -File "' + tempPsPath + '"';
+        var cmdFull = 'cmd.exe /c ' + psCmd + ' > "' + tempOutput + '" 2> "' + tempError + '"';
+        var exitCode = shell.Run(cmdFull, 0, true);
+
+        // 出力を読み取り
+        var output = "";
+        var error = "";
+
+        if (fso.FileExists(tempOutput)) {
+            var fileObj = fso.GetFile(tempOutput);
+            if (fileObj.Size > 0) {
+                var outFile = fso.OpenTextFile(tempOutput, 1);
+                output = outFile.ReadAll();
+                outFile.Close();
+            }
+            fso.DeleteFile(tempOutput);
+        }
+
+        if (fso.FileExists(tempError)) {
+            var fileObj = fso.GetFile(tempError);
+            if (fileObj.Size > 0) {
+                var errFile = fso.OpenTextFile(tempError, 1);
+                error = errFile.ReadAll();
+                errFile.Close();
+            }
+            fso.DeleteFile(tempError);
+        }
+
+        // 一時PowerShellスクリプトを削除
+        if (fso.FileExists(tempPsPath)) {
+            fso.DeleteFile(tempPsPath);
+        }
+
+        // 結果をログに出力
+        if (output) {
+            var lines = output.split("\n");
+            for (var i = 0; i < lines.length; i++) {
+                if (lines[i].trim()) {
+                    logMessage("  " + lines[i].trim());
+                }
+            }
+        }
+
+        if (error) {
+            var lines = error.split("\n");
+            for (var i = 0; i < lines.length; i++) {
+                if (lines[i].trim()) {
+                    logMessage("  ERROR: " + lines[i].trim(), "error");
+                }
+            }
+        }
+
+        if (exitCode === 0) {
+            logMessage("テストメール送信成功", "success");
+            alert("テストメールの送信に成功しました。\n\n" +
+                  "宛先: " + recipientEmail + "\n" +
+                  "件名: [テスト] RCScheduler メール送信テスト\n\n" +
+                  "受信トレイを確認してください。");
+        } else {
+            logMessage("テストメール送信失敗", "error");
+            alert("テストメールの送信に失敗しました。\n\n詳細はログを確認してください。");
+        }
+
+    } catch(e) {
+        logMessage("テストメール送信エラー: " + e.message, "error");
+        alert("テストメール送信でエラーが発生しました。\n\n" + e.message);
     }
 }
 
