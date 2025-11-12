@@ -1,4 +1,4 @@
-# RCScheduler (Windows用Robocopyスケジューラソフト)
+# RCScheduler (Windows用Robocopyスケジューラソフト) v2.0.0
 
 このアプリケーションは、Microsoft Windowsのタスクスケジューラを利用して、Robocopyによるフォルダのバックアップを簡単に設定・管理できるGUIツールです。ネットワークパス認証、フレキシブルなメール通知機能、実行ログの保存、タスク履歴の有効化など、多機能なバックアップスケジューラを直感的に操作できます。
 
