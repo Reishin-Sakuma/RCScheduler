@@ -2534,7 +2534,7 @@ function sendTestMail() {
         psScript += "$Subject = \"[テスト] RCScheduler メール送信テスト\"\r\n";
         psScript += "$Body = @\"\r\n";
         psScript += "RCScheduler メール送信テスト\r\n";
-        psScript += "=" + "=".repeat(40) + "\r\n\r\n";
+        psScript += "========================================\r\n\r\n";
         psScript += "送信日時: " + dateTimeStr + "\r\n\r\n";
         psScript += "SMTP設定情報:\r\n";
         psScript += "- SMTPサーバー: " + smtpServer + "\r\n";
