@@ -2873,6 +2873,76 @@ function testRun() {
 
     // 元に戻す
     document.getElementById('optListOnly').checked = originalListOnly;
+
+    // テスト実行後、一時ファイルの削除確認ダイアログを表示
+    // ユーザーがテスト実行ウィンドウを確認してから削除できるように、少し待機してから確認
+    setTimeout(function() {
+        if (confirm("テスト実行は完了しましたか？\n\n生成された一時ファイルを削除しますか？\n\n削除対象：\n- バッチファイル (rcscheduler_temp.bat)\n- メールスクリプト (rcscheduler_temp_mail.ps1)")) {
+            deleteTestTempFiles();
+        } else {
+            logMessage("一時ファイルは削除されませんでした", "info");
+        }
+    }, 2000); // 2秒待機
+}
+
+function deleteTestTempFiles() {
+    try {
+        var deletedFiles = [];
+        var errorFiles = [];
+
+        // バッチファイルを削除
+        var tempBatchPath = fso.BuildPath(fso.GetSpecialFolder(2), "rcscheduler_temp.bat");
+        if (fso.FileExists(tempBatchPath)) {
+            try {
+                fso.DeleteFile(tempBatchPath);
+                deletedFiles.push("rcscheduler_temp.bat");
+                logMessage("バッチファイルを削除しました: " + tempBatchPath, "success");
+            } catch(e) {
+                errorFiles.push("rcscheduler_temp.bat (エラー: " + e.message + ")");
+                logMessage("バッチファイルの削除に失敗しました: " + e.message, "error");
+            }
+        }
+
+        // メールスクリプトを削除（存在する場合）
+        var tempMailScriptPath = fso.BuildPath(fso.GetSpecialFolder(2), "rcscheduler_temp_mail.ps1");
+        if (fso.FileExists(tempMailScriptPath)) {
+            try {
+                fso.DeleteFile(tempMailScriptPath);
+                deletedFiles.push("rcscheduler_temp_mail.ps1");
+                logMessage("メールスクリプトを削除しました: " + tempMailScriptPath, "success");
+            } catch(e) {
+                errorFiles.push("rcscheduler_temp_mail.ps1 (エラー: " + e.message + ")");
+                logMessage("メールスクリプトの削除に失敗しました: " + e.message, "error");
+            }
+        }
+
+        // 結果を表示
+        var resultMessage = "";
+        if (deletedFiles.length > 0) {
+            resultMessage += "削除されたファイル:\n";
+            for (var i = 0; i < deletedFiles.length; i++) {
+                resultMessage += "- " + deletedFiles[i] + "\n";
+            }
+        }
+        if (errorFiles.length > 0) {
+            if (resultMessage) resultMessage += "\n";
+            resultMessage += "削除に失敗したファイル:\n";
+            for (var i = 0; i < errorFiles.length; i++) {
+                resultMessage += "- " + errorFiles[i] + "\n";
+            }
+            resultMessage += "\n※ファイルが使用中の可能性があります。\nテスト実行ウィンドウを閉じてから再試行してください。";
+        }
+
+        if (deletedFiles.length === 0 && errorFiles.length === 0) {
+            alert("削除対象の一時ファイルが見つかりませんでした。");
+        } else {
+            alert(resultMessage);
+        }
+
+    } catch(e) {
+        logMessage("一時ファイル削除エラー: " + e.message, "error");
+        alert("一時ファイル削除エラー: " + e.message);
+    }
 }
 
 </script>
