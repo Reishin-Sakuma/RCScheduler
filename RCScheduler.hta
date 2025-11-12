@@ -2516,6 +2516,9 @@ function sendTestMail() {
                           ("0" + now.getMinutes()).slice(-2) + ":" +
                           ("0" + now.getSeconds()).slice(-2);
 
+        // ホスト名を取得
+        var hostName = shell.ExpandEnvironmentStrings("%COMPUTERNAME%");
+
         // テストメール用PowerShellスクリプトを生成
         var psScript = "# RCScheduler テストメール送信\r\n";
         psScript += "$ErrorActionPreference = \"Stop\"\r\n\r\n";
@@ -2535,7 +2538,8 @@ function sendTestMail() {
         psScript += "$Body = @\"\r\n";
         psScript += "RCScheduler メール送信テスト\r\n";
         psScript += "========================================\r\n\r\n";
-        psScript += "送信日時: " + dateTimeStr + "\r\n\r\n";
+        psScript += "送信日時: " + dateTimeStr + "\r\n";
+        psScript += "実行ホスト: " + hostName + "\r\n\r\n";
         psScript += "SMTP設定情報:\r\n";
         psScript += "- SMTPサーバー: " + smtpServer + "\r\n";
         psScript += "- ポート番号: " + smtpPort + "\r\n";
