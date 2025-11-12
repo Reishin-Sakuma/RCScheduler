@@ -1,0 +1,2836 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<HTA:APPLICATION
+    ID="RCScheduler"
+    APPLICATIONNAME="RCScheduler"
+    BORDER="thick"
+    BORDERSTYLE="normal"
+    CAPTION="yes"
+    ICON=""
+    MAXIMIZEBUTTON="yes"
+    MINIMIZEBUTTON="yes"
+    SHOWINTASKBAR="yes"
+    SINGLEINSTANCE="yes"
+    SYSMENU="yes"
+    SCROLL="yes"
+    WINDOWSTATE="normal"
+/>
+<meta charset="UTF-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<title>RCScheduler - ver.2.0.0</title>
+
+<style>
+    /* ====================================== */
+    /* ダークテーマCSS                         */
+    /* ====================================== */
+
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
+
+    :root {
+        /* カラーパレット */
+        --primary: #3b82f6;
+        --secondary: #6b7280;
+        --success: #10b981;
+        --warning: #f59e0b;
+        --danger: #ef4444;
+        --bg-primary: #1a1a1a;
+        --bg-secondary: #2d2d2d;
+        --bg-tertiary: #404040;
+        --white: #ffffff;
+        --dark: #0f0f0f;
+        --border: #404040;
+        --text: #e5e5e5;
+        --text-muted: #a1a1a1;
+        --text-dark: #ffffff;
+    }
+
+    body {
+        font-family: 'メイリオ', Meiryo, sans-serif;
+        background-color: #1a1a1a;
+        color: #e5e5e5;
+        padding: 20px;
+        overflow-y: scroll;
+    }
+
+    .container {
+        max-width: 900px;
+        margin: 0 auto;
+    }
+
+    /* ヘッダー */
+    .header {
+        margin-bottom: 25px;
+    }
+
+    .header h1 {
+        font-size: 28px;
+        font-weight: bold;
+        color: #ffffff;
+        display: inline-block;
+    }
+
+    .header .version {
+        font-size: 16px;
+        color: #a1a1a1;
+        margin-left: 10px;
+    }
+
+    .header .description {
+        font-size: 14px;
+        color: #a1a1a1;
+        margin-top: 10px;
+    }
+
+    /* セクション */
+    .section {
+        background-color: #2d2d2d;
+        border: 1px solid #404040;
+        border-radius: 4px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+
+    .section-title {
+        font-size: 16px;
+        font-weight: bold;
+        color: #ffffff;
+        margin-bottom: 15px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #404040;
+    }
+
+    /* フォームグループ */
+    .form-group {
+        margin-bottom: 15px;
+    }
+
+    .form-group label {
+        display: block;
+        font-size: 14px;
+        color: #e5e5e5;
+        margin-bottom: 5px;
+    }
+
+    .form-group input[type="text"],
+    .form-group input[type="password"],
+    .form-group input[type="number"],
+    .form-group select {
+        width: 100%;
+        padding: 8px;
+        font-size: 14px;
+        font-family: 'メイリオ', Meiryo, sans-serif;
+        background-color: #404040;
+        color: #e5e5e5;
+        border: 1px solid #404040;
+        border-radius: 4px;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus {
+        outline: none;
+        border-color: #3b82f6;
+    }
+
+    /* インラインフォーム（横並び） */
+    .form-inline {
+        display: flex;
+        gap: 10px;
+        align-items: flex-end;
+    }
+
+    .form-inline .form-group {
+        flex: 1;
+        margin-bottom: 0;
+    }
+
+    .form-inline button {
+        flex-shrink: 0;
+    }
+
+    /* ボタン */
+    button {
+        padding: 10px 20px;
+        font-size: 15px;
+        font-family: 'メイリオ', Meiryo, sans-serif;
+        font-weight: bold;
+        color: #ffffff;
+        background-color: #3b82f6;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background-color 0.2s;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    }
+
+    button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .btn-primary {
+        background-color: #3b82f6;
+        color: white;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+        background-color: #1d4ed8;
+    }
+
+    .btn-secondary {
+        background-color: #6b7280;
+        color: white;
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+        background-color: #475569;
+    }
+
+    .btn-success {
+        background-color: #10b981;
+        color: white;
+    }
+
+    .btn-success:hover:not(:disabled) {
+        background-color: #059669;
+    }
+
+    .btn-warning {
+        background-color: #f59e0b;
+        color: white;
+    }
+
+    .btn-warning:hover:not(:disabled) {
+        background-color: #d97706;
+    }
+
+    .btn-danger {
+        background-color: #ef4444;
+        color: white;
+    }
+
+    .btn-danger:hover:not(:disabled) {
+        background-color: #dc2626;
+    }
+
+    .btn-small {
+        padding: 6px 12px;
+        font-size: 12px;
+    }
+
+    /* チェックボックス・ラジオボタン */
+    .checkbox-group,
+    .radio-group {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .checkbox-group label,
+    .radio-group label {
+        display: flex;
+        align-items: center;
+        cursor: pointer;
+    }
+
+    .checkbox-group input,
+    .radio-group input {
+        margin-right: 8px;
+    }
+
+    /* グリッドレイアウト */
+    .grid {
+        display: grid;
+        gap: 15px;
+    }
+
+    .grid-2 {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .grid-3 {
+        grid-template-columns: 1fr 1fr 1fr;
+    }
+
+    /* ログエリア */
+    .log-area {
+        width: 100%;
+        height: 200px;
+        padding: 10px;
+        font-family: 'Consolas', 'Courier New', monospace;
+        font-size: 12px;
+        background-color: #0f0f0f;
+        color: #e5e5e5;
+        border: 1px solid #404040;
+        border-radius: 4px;
+        overflow-y: scroll;
+        resize: vertical;
+    }
+
+    /* ステータスバー */
+    .status-bar {
+        background-color: #404040;
+        padding: 10px;
+        border-radius: 4px;
+        margin-bottom: 15px;
+    }
+
+    .status-bar .status-label {
+        font-weight: bold;
+        color: #ffffff;
+    }
+
+    .status-bar .status-value {
+        color: #a1a1a1;
+    }
+
+    /* セパレーター */
+    .separator {
+        height: 1px;
+        background-color: #404040;
+        margin: 20px 0;
+    }
+
+    /* 小さいテキスト */
+    .text-small {
+        font-size: 12px;
+        color: #a1a1a1;
+    }
+
+    /* 週選択グリッド */
+    .week-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 5px;
+        margin-top: 10px;
+    }
+
+    .week-grid label {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 8px;
+        background-color: #404040;
+        border: 1px solid #404040;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+
+    .week-grid label:hover {
+        background-color: #1a1a1a;
+    }
+
+    .week-grid input[type="checkbox"] {
+        margin-bottom: 5px;
+    }
+
+    /* アクションボタンエリア */
+    .action-buttons {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .action-buttons button {
+        flex: 1;
+        min-width: 150px;
+    }
+
+    /* 認証セクション（初期は非表示） */
+    .auth-section {
+        margin-top: 10px;
+        padding: 10px;
+        background-color: #404040;
+        border-radius: 4px;
+        border: 1px solid #404040;
+    }
+
+    .auth-section.disabled {
+        opacity: 0.5;
+        pointer-events: none;
+    }
+</style>
+</head>
+<body>
+
+<div class="container">
+    <!-- ヘッダー -->
+    <div class="header">
+        <h1>RCScheduler</h1>
+        <span class="version">v2.0.0</span>
+        <p class="description">
+            Robocopyを使った自動バックアップスケジューラー。フォルダの同期、タスクスケジューラへの登録、メール通知機能を提供します。
+        </p>
+    </div>
+
+    <!-- Robocopy設定セクション -->
+    <div class="section">
+        <div class="section-title">📁 Robocopy設定</div>
+
+        <!-- コピー元 -->
+        <div class="form-inline">
+            <div class="form-group">
+                <label for="source">コピー元フォルダ</label>
+                <input type="text" id="source" placeholder="例: C:\Source または \\server\share">
+            </div>
+            <button class="btn-secondary btn-small" onclick="browseFolder('source')">参照...</button>
+        </div>
+
+        <!-- コピー元認証 -->
+        <div id="sourceAuthSection" class="auth-section disabled">
+            <p class="text-small" style="margin-bottom: 10px;">ネットワークパス認証情報</p>
+            <div class="grid grid-3">
+                <div class="form-group">
+                    <label for="sourceUsername">ユーザー名</label>
+                    <input type="text" id="sourceUsername">
+                </div>
+                <div class="form-group">
+                    <label for="sourcePassword">パスワード</label>
+                    <input type="password" id="sourcePassword">
+                </div>
+                <div class="form-group">
+                    <label for="sourceDomain">ドメイン（任意）</label>
+                    <input type="text" id="sourceDomain">
+                </div>
+            </div>
+            <button class="btn-primary btn-small" onclick="testNetworkConnection('source')">接続テスト</button>
+        </div>
+
+        <!-- コピー先 -->
+        <div class="form-inline" style="margin-top: 15px;">
+            <div class="form-group">
+                <label for="dest">コピー先フォルダ</label>
+                <input type="text" id="dest" placeholder="例: D:\Backup または \\backup-server\share">
+            </div>
+            <button class="btn-secondary btn-small" onclick="browseFolder('dest')">参照...</button>
+        </div>
+
+        <!-- コピー先認証 -->
+        <div id="destAuthSection" class="auth-section disabled">
+            <p class="text-small" style="margin-bottom: 10px;">ネットワークパス認証情報</p>
+            <div class="grid grid-3">
+                <div class="form-group">
+                    <label for="destUsername">ユーザー名</label>
+                    <input type="text" id="destUsername">
+                </div>
+                <div class="form-group">
+                    <label for="destPassword">パスワード</label>
+                    <input type="password" id="destPassword">
+                </div>
+                <div class="form-group">
+                    <label for="destDomain">ドメイン（任意）</label>
+                    <input type="text" id="destDomain">
+                </div>
+            </div>
+            <button class="btn-primary btn-small" onclick="testNetworkConnection('dest')">接続テスト</button>
+        </div>
+
+        <div class="separator"></div>
+
+        <!-- コピーモード -->
+        <div class="form-group">
+            <label>コピーモード</label>
+            <div class="radio-group">
+                <label>
+                    <input type="radio" name="copyMode" value="MIR" checked>
+                    /MIR（ミラーモード - コピー先を完全同期、削除も反映）
+                </label>
+                <label>
+                    <input type="radio" name="copyMode" value="E">
+                    /E（サブディレクトリをコピー - 削除は同期しない）
+                </label>
+            </div>
+        </div>
+
+        <!-- Robocopyオプション -->
+        <div class="form-group">
+            <label>Robocopyオプション</label>
+            <div class="checkbox-group">
+                <label>
+                    <input type="checkbox" id="optNoProgress" checked>
+                    /NP（進行状況を表示しない）
+                </label>
+                <label>
+                    <input type="checkbox" id="optNoDirList" checked>
+                    /NDL（ディレクトリリストを表示しない）
+                </label>
+                <label>
+                    <input type="checkbox" id="optSec">
+                    /SEC（NTFS権限もコピー）
+                </label>
+                <label>
+                    <input type="checkbox" id="optListOnly">
+                    /L（テストモード - 実際にはコピーしない）
+                </label>
+                <label>
+                    <input type="checkbox" id="optEnableLog" checked>
+                    LOG（ログファイルに記録）
+                </label>
+            </div>
+        </div>
+
+        <!-- リトライ設定 -->
+        <div class="grid grid-2">
+            <div class="form-group">
+                <label for="retryCount">リトライ回数（/R）</label>
+                <input type="number" id="retryCount" value="3" min="0" max="100">
+            </div>
+            <div class="form-group">
+                <label for="waitTime">待機時間（秒）（/W）</label>
+                <input type="number" id="waitTime" value="10" min="0" max="3600">
+            </div>
+        </div>
+
+        <!-- ログファイル -->
+        <div class="form-inline">
+            <div class="form-group">
+                <label for="logFile">ログファイルパス</label>
+                <input type="text" id="logFile" placeholder="例: C:\Logs\robocopy.log">
+            </div>
+            <button class="btn-secondary btn-small" onclick="browseFile('logFile')">参照...</button>
+        </div>
+
+        <!-- カスタムオプション -->
+        <div class="form-group">
+            <label for="customOptions">カスタムオプション（追加のRobocopyオプション）</label>
+            <input type="text" id="customOptions" placeholder="例: /MAXAGE:7 /XO">
+        </div>
+    </div>
+
+    <!-- スケジュール設定セクション -->
+    <div class="section">
+        <div class="section-title">⏰ スケジュール設定</div>
+
+        <!-- タスク名 -->
+        <div class="form-group">
+            <label for="taskName">タスク名</label>
+            <input type="text" id="taskName" value="RobocopyBackupTask" placeholder="タスクスケジューラに登録される名前">
+        </div>
+
+        <!-- 実行頻度 -->
+        <div class="form-group">
+            <label>実行頻度</label>
+            <div class="radio-group">
+                <label>
+                    <input type="radio" name="frequency" value="DAILY" checked onchange="updateWeekdayState()">
+                    毎日実行
+                </label>
+                <label>
+                    <input type="radio" name="frequency" value="WEEKLY" onchange="updateWeekdayState()">
+                    毎週実行
+                </label>
+            </div>
+        </div>
+
+        <!-- 曜日選択 -->
+        <div id="weekdaySection" style="display: none;">
+            <label>実行曜日</label>
+            <div class="week-grid">
+                <label>
+                    <input type="checkbox" value="MON">
+                    <span>月</span>
+                </label>
+                <label>
+                    <input type="checkbox" value="TUE">
+                    <span>火</span>
+                </label>
+                <label>
+                    <input type="checkbox" value="WED">
+                    <span>水</span>
+                </label>
+                <label>
+                    <input type="checkbox" value="THU">
+                    <span>木</span>
+                </label>
+                <label>
+                    <input type="checkbox" value="FRI">
+                    <span>金</span>
+                </label>
+                <label>
+                    <input type="checkbox" value="SAT">
+                    <span>土</span>
+                </label>
+                <label>
+                    <input type="checkbox" value="SUN">
+                    <span>日</span>
+                </label>
+            </div>
+        </div>
+
+        <!-- 実行時刻 -->
+        <div class="grid grid-2">
+            <div class="form-group">
+                <label for="hour">実行時刻 - 時</label>
+                <input type="number" id="hour" value="2" min="0" max="23">
+            </div>
+            <div class="form-group">
+                <label for="minute">実行時刻 - 分</label>
+                <input type="number" id="minute" value="0" min="0" max="59">
+            </div>
+        </div>
+
+        <!-- タスク履歴 -->
+        <div class="form-group">
+            <label>
+                <input type="checkbox" id="historyEnabled" checked>
+                タスク実行履歴を記録する
+            </label>
+        </div>
+    </div>
+
+    <!-- メール通知設定セクション -->
+    <div class="section">
+        <div class="section-title">📧 メール通知設定</div>
+
+        <!-- メール有効化 -->
+        <div class="form-group">
+            <label>
+                <input type="checkbox" id="emailEnabled" onchange="toggleEmailSettings()">
+                メール通知を有効にする
+            </label>
+        </div>
+
+        <div id="emailSettings" style="display: none;">
+            <!-- SMTP設定 -->
+            <div class="grid grid-2">
+                <div class="form-group">
+                    <label for="smtpServer">SMTPサーバー</label>
+                    <input type="text" id="smtpServer" placeholder="例: smtp.gmail.com">
+                </div>
+                <div class="form-group">
+                    <label for="smtpPort">ポート</label>
+                    <input type="number" id="smtpPort" value="587" min="1" max="65535">
+                </div>
+            </div>
+
+            <!-- 接続保護 -->
+            <div class="grid grid-2">
+                <div class="form-group">
+                    <label for="connectionSecurity">接続の保護</label>
+                    <select id="connectionSecurity">
+                        <option value="暗号化なし">暗号化なし</option>
+                        <option value="STARTTLS" selected>STARTTLS</option>
+                        <option value="SSL/TLS">SSL/TLS</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="authMethod">認証方式</label>
+                    <select id="authMethod">
+                        <option value="BASIC" selected>BASIC</option>
+                        <option value="CRAM-MD5">CRAM-MD5</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- メール認証情報 -->
+            <div class="grid grid-2">
+                <div class="form-group">
+                    <label for="senderEmail">送信者メールアドレス</label>
+                    <input type="text" id="senderEmail" placeholder="例: sender@example.com">
+                </div>
+                <div class="form-group">
+                    <label for="senderPassword">送信者パスワード</label>
+                    <input type="password" id="senderPassword">
+                </div>
+            </div>
+
+            <!-- 受信者 -->
+            <div class="form-group">
+                <label for="recipientEmail">受信者メールアドレス</label>
+                <input type="text" id="recipientEmail" placeholder="例: recipient@example.com">
+            </div>
+
+            <!-- SMTP接続テスト -->
+            <div class="action-buttons">
+                <button class="btn-primary btn-small" onclick="testSmtpConnection()">SMTP接続テスト</button>
+                <button class="btn-success btn-small" onclick="sendTestMail()">メールテスト送信</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- タスクステータス -->
+    <div class="section">
+        <div class="section-title">📊 タスクステータス</div>
+        <div class="status-bar">
+            <span class="status-label">現在のタスク状態: </span>
+            <span class="status-value" id="taskStatus">確認中...</span>
+        </div>
+        <button class="btn-secondary btn-small" onclick="updateTaskStatus()">ステータス更新</button>
+    </div>
+
+    <!-- 実行ボタン -->
+    <div class="section">
+        <div class="section-title">▶️ 実行</div>
+        <div class="action-buttons">
+            <button class="btn-primary" onclick="saveConfig()">💾 設定を保存</button>
+            <button class="btn-primary" onclick="createScheduledTask()">タスク登録</button>
+            <button class="btn-danger" onclick="deleteScheduledTask()">タスク削除</button>
+            <button class="btn-secondary" onclick="openTaskScheduler()">📅 タスクスケジューラを開く</button>
+        </div>
+    </div>
+
+    <!-- ログ表示 -->
+    <div class="section">
+        <div class="section-title">📝 ログ</div>
+        <textarea class="log-area" id="logArea" readonly></textarea>
+    </div>
+
+    <!-- タスク履歴設定 -->
+    <div class="section">
+        <div class="section-title">📋 タスク履歴設定</div>
+        <p class="text-small" style="margin-bottom: 15px;">
+            Windowsタスクスケジューラのイベントログ機能を管理します。<br>
+            ※この操作には管理者権限が必要です。
+        </p>
+        <div class="status-bar">
+            <span class="status-label">現在の履歴設定: </span>
+            <span class="status-value" id="taskHistoryStatus">確認中...</span>
+        </div>
+        <div class="action-buttons" style="margin-top: 15px;">
+            <button class="btn-success" onclick="enableTaskHistory()">履歴を有効化</button>
+            <button class="btn-warning" onclick="disableTaskHistory()">履歴を無効化</button>
+            <button class="btn-secondary" onclick="getTaskHistoryStatus()">現在の設定確認</button>
+        </div>
+    </div>
+</div>
+
+<script type="text/javascript">
+// ======================================
+// グローバル変数
+// ======================================
+
+var VERSION = "2.0.0";
+var CONFIG_FILE = "robocopy_config.json";
+var fso = new ActiveXObject("Scripting.FileSystemObject");
+var shell = new ActiveXObject("WScript.Shell");
+var shellApp = new ActiveXObject("Shell.Application");
+
+// ======================================
+// 初期化
+// ======================================
+
+window.onload = function() {
+    logMessage("RCSchedulerが起動しました - ver." + VERSION);
+
+    // 管理者権限チェック
+    if (!isAdmin()) {
+        logMessage("管理者権限なしで起動しています - 管理者権限で再起動します", "warning");
+
+        if (confirm("このアプリケーションは管理者権限が必要です。\n\n" +
+                    "タスクスケジューラへの登録やSYSTEM権限での実行には管理者権限が必須です。\n\n" +
+                    "管理者権限で再起動しますか？")) {
+            runAsAdmin();
+            return; // 再起動するのでここで処理終了
+        } else {
+            alert("管理者権限なしで続行します。一部機能が制限されます。");
+            logMessage("ユーザーが管理者権限昇格をキャンセルしました", "warning");
+        }
+    } else {
+        logMessage("管理者権限で起動しています - 全機能が利用可能です", "success");
+    }
+
+    // 設定を読み込み
+    loadConfig();
+
+    // タスクステータスを更新
+    updateTaskStatus();
+
+    // タスク履歴の設定状態を確認（起動時）
+    getTaskHistoryStatus(true); // true = サイレントモード
+
+    // イベントリスナー設定
+    setupEventListeners();
+};
+
+function setupEventListeners() {
+    // コピー元・先の変更で認証セクションを更新
+    document.getElementById('source').onchange = updateAuthState;
+    document.getElementById('dest').onchange = function() {
+        updateAuthState();
+        updateTaskNameFromDest();
+    };
+}
+
+// ======================================
+// ユーティリティ関数
+// ======================================
+
+function logMessage(message, type) {
+    var logArea = document.getElementById('logArea');
+    var timestamp = new Date().toLocaleString('ja-JP');
+    var prefix = "";
+
+    if (type === "error") prefix = "[ERROR] ";
+    else if (type === "success") prefix = "[SUCCESS] ";
+    else if (type === "warning") prefix = "[WARNING] ";
+    else prefix = "[INFO] ";
+
+    logArea.value += timestamp + " " + prefix + message + "\n";
+    logArea.scrollTop = logArea.scrollHeight;
+}
+
+function isAdmin() {
+    try {
+        var result = shell.Run('net session', 0, true);
+        return result === 0;
+    } catch(e) {
+        return false;
+    }
+}
+
+function runAsAdmin() {
+    try {
+        // 現在のHTAファイルのパスを取得
+        var htaPath = location.pathname.substring(1);
+
+        // 一時VBScriptを作成して管理者権限で再起動
+        var vbsPath = fso.BuildPath(fso.GetSpecialFolder(2), "rcscheduler_elevate.vbs");
+
+        var vbsContent = 'Set objShell = CreateObject("Shell.Application")\n';
+        vbsContent += 'objShell.ShellExecute "mshta.exe", """' + htaPath + '""", "", "runas", 1\n';
+
+        var vbsFile = fso.CreateTextFile(vbsPath, true, false);
+        vbsFile.Write(vbsContent);
+        vbsFile.Close();
+
+        // VBScriptを実行
+        shell.Run('wscript.exe "' + vbsPath + '"', 0, false);
+
+        // 現在のプロセスを終了
+        window.close();
+
+    } catch(e) {
+        logMessage("管理者権限昇格エラー: " + e.message, "error");
+        alert("管理者権限での起動に失敗しました。\n\n手動で管理者権限での起動を試みてください。");
+    }
+}
+
+function isNetworkPath(path) {
+    return path && path.indexOf("\\\\") === 0;
+}
+
+function updateAuthState() {
+    var sourcePath = document.getElementById('source').value;
+    var destPath = document.getElementById('dest').value;
+
+    // コピー元認証セクション
+    var sourceAuthSection = document.getElementById('sourceAuthSection');
+    if (isNetworkPath(sourcePath)) {
+        sourceAuthSection.classList.remove('disabled');
+    } else {
+        sourceAuthSection.classList.add('disabled');
+    }
+
+    // コピー先認証セクション
+    var destAuthSection = document.getElementById('destAuthSection');
+    if (isNetworkPath(destPath)) {
+        destAuthSection.classList.remove('disabled');
+    } else {
+        destAuthSection.classList.add('disabled');
+    }
+}
+
+function updateTaskNameFromDest() {
+    var destPath = document.getElementById('dest').value;
+    if (!destPath) return;
+
+    try {
+        // パスの最後の部分（フォルダ名）を取得
+        var folderName = fso.GetFileName(destPath);
+
+        // 空の場合はドライブ名などを使用
+        if (!folderName) {
+            folderName = destPath.replace(/:/g, '').replace(/\\/g, '_');
+        }
+
+        // タスク名に使用できない文字を除去・置換
+        var invalidChars = '<>:"/\\|?*';
+        for (var i = 0; i < invalidChars.length; i++) {
+            folderName = folderName.split(invalidChars[i]).join('_');
+        }
+
+        // 空白を含む場合はアンダースコアに置換
+        folderName = folderName.split(' ').join('_');
+
+        // 最大長制限
+        if (folderName.length > 50) {
+            folderName = folderName.substring(0, 50);
+        }
+
+        document.getElementById('taskName').value = folderName + "-Robocopy";
+
+    } catch(e) {
+        logMessage("タスク名生成エラー: " + e.message, "error");
+    }
+}
+
+function updateWeekdayState() {
+    var frequency = document.querySelector('input[name="frequency"]:checked').value;
+    var weekdaySection = document.getElementById('weekdaySection');
+
+    if (frequency === "WEEKLY") {
+        weekdaySection.style.display = "block";
+    } else {
+        weekdaySection.style.display = "none";
+    }
+}
+
+function toggleEmailSettings() {
+    var emailEnabled = document.getElementById('emailEnabled').checked;
+    var emailSettings = document.getElementById('emailSettings');
+
+    if (emailEnabled) {
+        emailSettings.style.display = "block";
+    } else {
+        emailSettings.style.display = "none";
+    }
+}
+
+// ======================================
+// ファイル・フォルダ参照
+// ======================================
+
+function browseFolder(targetId) {
+    try {
+        var folder = shellApp.BrowseForFolder(0, "フォルダを選択してください", 0);
+        if (folder) {
+            var folderPath = folder.Self.Path;
+            document.getElementById(targetId).value = folderPath;
+
+            // イベント発火
+            if (targetId === 'source' || targetId === 'dest') {
+                updateAuthState();
+                if (targetId === 'dest') {
+                    updateTaskNameFromDest();
+                }
+            }
+        }
+    } catch(e) {
+        logMessage("フォルダ参照エラー: " + e.message, "error");
+    }
+}
+
+function browseFile(targetId) {
+    try {
+        // HTAの制約により、ファイル選択ダイアログは手入力で代替
+        var currentValue = document.getElementById(targetId).value;
+        var defaultValue = currentValue || "C:\\Logs\\robocopy.log";
+
+        var selectedFile = prompt("ログファイルのパスを入力してください:", defaultValue);
+        if (selectedFile) {
+            document.getElementById(targetId).value = selectedFile;
+        }
+    } catch(e) {
+        logMessage("ファイル参照エラー: " + e.message, "error");
+    }
+}
+
+// ======================================
+// 設定の保存・読み込み
+// ======================================
+
+function saveConfig() {
+    try {
+        var config = {
+            source: document.getElementById('source').value,
+            dest: document.getElementById('dest').value,
+            task_name: document.getElementById('taskName').value,
+            copy_mode: document.querySelector('input[name="copyMode"]:checked').value,
+            robocopy_options: {
+                no_progress: document.getElementById('optNoProgress').checked,
+                no_dir_list: document.getElementById('optNoDirList').checked,
+                sec: document.getElementById('optSec').checked,
+                list_only: document.getElementById('optListOnly').checked,
+                enable_log: document.getElementById('optEnableLog').checked
+            },
+            retry_count: document.getElementById('retryCount').value,
+            wait_time: document.getElementById('waitTime').value,
+            log_file: document.getElementById('logFile').value,
+            custom_options: document.getElementById('customOptions').value,
+            frequency: document.querySelector('input[name="frequency"]:checked').value,
+            weekday: getSelectedWeekdays(),
+            hour: document.getElementById('hour').value,
+            minute: document.getElementById('minute').value,
+            email_enabled: document.getElementById('emailEnabled').checked,
+            smtp_server: document.getElementById('smtpServer').value,
+            smtp_port: document.getElementById('smtpPort').value,
+            connection_security: document.getElementById('connectionSecurity').value,
+            auth_method: document.getElementById('authMethod').value,
+            sender_email: document.getElementById('senderEmail').value,
+            sender_password: document.getElementById('senderPassword').value,
+            recipient_email: document.getElementById('recipientEmail').value,
+            history_enabled: document.getElementById('historyEnabled').checked,
+            source_username: document.getElementById('sourceUsername').value,
+            source_password: document.getElementById('sourcePassword').value,
+            source_domain: document.getElementById('sourceDomain').value,
+            dest_username: document.getElementById('destUsername').value,
+            dest_password: document.getElementById('destPassword').value,
+            dest_domain: document.getElementById('destDomain').value
+        };
+
+        var configJson = JSON.stringify(config, null, 2);
+
+        var configPath = fso.BuildPath(fso.GetParentFolderName(location.pathname.substring(1)), CONFIG_FILE);
+        var file = fso.CreateTextFile(configPath, true, false);
+        file.Write(configJson);
+        file.Close();
+
+        logMessage("設定を保存しました: " + configPath, "success");
+        return true;
+    } catch(e) {
+        logMessage("設定保存エラー: " + e.message, "error");
+        return false;
+    }
+}
+
+function loadConfig() {
+    try {
+        var configPath = fso.BuildPath(fso.GetParentFolderName(location.pathname.substring(1)), CONFIG_FILE);
+
+        if (!fso.FileExists(configPath)) {
+            logMessage("設定ファイルが見つかりません。デフォルト設定を使用します。");
+            return;
+        }
+
+        var file = fso.OpenTextFile(configPath, 1, false);
+        var configJson = file.ReadAll();
+        file.Close();
+
+        var config = JSON.parse(configJson);
+
+        // 設定を復元
+        if (config.source) document.getElementById('source').value = config.source;
+        if (config.dest) document.getElementById('dest').value = config.dest;
+        if (config.task_name) document.getElementById('taskName').value = config.task_name;
+
+        if (config.copy_mode) {
+            var radios = document.getElementsByName('copyMode');
+            for (var i = 0; i < radios.length; i++) {
+                if (radios[i].value === config.copy_mode) {
+                    radios[i].checked = true;
+                }
+            }
+        }
+
+        if (config.robocopy_options) {
+            document.getElementById('optNoProgress').checked = config.robocopy_options.no_progress || false;
+            document.getElementById('optNoDirList').checked = config.robocopy_options.no_dir_list || false;
+            document.getElementById('optSec').checked = config.robocopy_options.sec || false;
+            document.getElementById('optListOnly').checked = config.robocopy_options.list_only || false;
+            document.getElementById('optEnableLog').checked = config.robocopy_options.enable_log || false;
+        }
+
+        if (config.retry_count) document.getElementById('retryCount').value = config.retry_count;
+        if (config.wait_time) document.getElementById('waitTime').value = config.wait_time;
+        if (config.log_file) document.getElementById('logFile').value = config.log_file;
+        if (config.custom_options) document.getElementById('customOptions').value = config.custom_options;
+
+        if (config.frequency) {
+            var freqRadios = document.getElementsByName('frequency');
+            for (var i = 0; i < freqRadios.length; i++) {
+                if (freqRadios[i].value === config.frequency) {
+                    freqRadios[i].checked = true;
+                }
+            }
+            updateWeekdayState();
+        }
+
+        if (config.weekday) {
+            setSelectedWeekdays(config.weekday);
+        }
+
+        if (config.hour) document.getElementById('hour').value = config.hour;
+        if (config.minute) document.getElementById('minute').value = config.minute;
+
+        if (config.email_enabled !== undefined) {
+            document.getElementById('emailEnabled').checked = config.email_enabled;
+            toggleEmailSettings();
+        }
+
+        if (config.smtp_server) document.getElementById('smtpServer').value = config.smtp_server;
+        if (config.smtp_port) document.getElementById('smtpPort').value = config.smtp_port;
+        if (config.connection_security) document.getElementById('connectionSecurity').value = config.connection_security;
+        if (config.auth_method) document.getElementById('authMethod').value = config.auth_method;
+        if (config.sender_email) document.getElementById('senderEmail').value = config.sender_email;
+        if (config.sender_password) document.getElementById('senderPassword').value = config.sender_password;
+        if (config.recipient_email) document.getElementById('recipientEmail').value = config.recipient_email;
+
+        if (config.history_enabled !== undefined) {
+            document.getElementById('historyEnabled').checked = config.history_enabled;
+        }
+
+        if (config.source_username) document.getElementById('sourceUsername').value = config.source_username;
+        if (config.source_password) document.getElementById('sourcePassword').value = config.source_password;
+        if (config.source_domain) document.getElementById('sourceDomain').value = config.source_domain;
+        if (config.dest_username) document.getElementById('destUsername').value = config.dest_username;
+        if (config.dest_password) document.getElementById('destPassword').value = config.dest_password;
+        if (config.dest_domain) document.getElementById('destDomain').value = config.dest_domain;
+
+        // 認証セクションの表示状態を更新
+        updateAuthState();
+
+        logMessage("設定を読み込みました: " + configPath, "success");
+    } catch(e) {
+        logMessage("設定読み込みエラー: " + e.message, "error");
+    }
+}
+
+function getSelectedWeekdays() {
+    var checkboxes = document.querySelectorAll('.week-grid input[type="checkbox"]:checked');
+    var weekdays = [];
+    for (var i = 0; i < checkboxes.length; i++) {
+        weekdays.push(checkboxes[i].value);
+    }
+    return weekdays.join(',');
+}
+
+function setSelectedWeekdays(weekdayStr) {
+    if (!weekdayStr) return;
+
+    var weekdays = weekdayStr.split(',');
+    var checkboxes = document.querySelectorAll('.week-grid input[type="checkbox"]');
+
+    for (var i = 0; i < checkboxes.length; i++) {
+        checkboxes[i].checked = false;
+        for (var j = 0; j < weekdays.length; j++) {
+            if (checkboxes[i].value === weekdays[j]) {
+                checkboxes[i].checked = true;
+            }
+        }
+    }
+}
+
+// ======================================
+// Robocopyコマンド生成
+// ======================================
+
+function buildRobocopyOptions(forGui) {
+    var options = [];
+
+    // コピーモード
+    var copyMode = document.querySelector('input[name="copyMode"]:checked').value;
+    if (copyMode === "MIR") {
+        options.push("/MIR");
+    } else {
+        options.push("/E");
+    }
+
+    // その他のオプション
+    if (document.getElementById('optNoProgress').checked) {
+        options.push("/NP");
+    }
+
+    if (document.getElementById('optNoDirList').checked) {
+        options.push("/NDL");
+    }
+
+    if (document.getElementById('optSec').checked) {
+        options.push("/SEC");
+    }
+
+    if (document.getElementById('optListOnly').checked && forGui) {
+        options.push("/L");
+    }
+
+    // リトライ設定
+    var retryCount = document.getElementById('retryCount').value;
+    var waitTime = document.getElementById('waitTime').value;
+
+    if (retryCount) {
+        options.push("/R:" + retryCount);
+    }
+
+    if (waitTime) {
+        options.push("/W:" + waitTime);
+    }
+
+    // カスタムオプション
+    var customOptions = document.getElementById('customOptions').value.trim();
+    if (customOptions) {
+        options.push(customOptions);
+    }
+
+    return options.join(" ");
+}
+
+function escapeBatchPassword(password) {
+    if (!password) return "";
+
+    // バッチファイルの特殊文字をエスケープ
+    password = password.replace(/\^/g, "^^");
+    password = password.replace(/%/g, "%%");
+    password = password.replace(/&/g, "^&");
+    password = password.replace(/</g, "^<");
+    password = password.replace(/>/g, "^>");
+    password = password.replace(/\|/g, "^|");
+    password = password.replace(/"/g, '""');
+
+    return password;
+}
+
+function escapeBatchString(str) {
+    if (!str) return "";
+
+    // % を %% にエスケープ
+    str = str.replace(/%/g, "%%");
+
+    return str;
+}
+
+function escapePowerShellString(str) {
+    if (!str) return "";
+
+    // PowerShell用エスケープ
+    str = str.replace(/'/g, "''");
+    str = str.replace(/`/g, "``");
+    str = str.replace(/\$/g, "`$");
+
+    return str;
+}
+
+// ======================================
+// バッチスクリプト生成
+// ======================================
+
+function generateBatchScript() {
+    var now = new Date();
+    var dateStr = now.getFullYear() + "-" +
+                  padZero(now.getMonth() + 1) + "-" +
+                  padZero(now.getDate()) + " " +
+                  padZero(now.getHours()) + ":" +
+                  padZero(now.getMinutes()) + ":" +
+                  padZero(now.getSeconds());
+
+    var source = document.getElementById('source').value;
+    var dest = document.getElementById('dest').value;
+    var options = buildRobocopyOptions(false);
+
+    // ベースログファイルのパス（拡張子なし）
+    var baseLogFile = document.getElementById('logFile').value || "robocopy_schedule_log";
+    if (baseLogFile.toLowerCase().indexOf('.txt') === baseLogFile.length - 4) {
+        baseLogFile = baseLogFile.substring(0, baseLogFile.length - 4);
+    }
+    // 絶対パスに変換
+    if (!fso.FileExists(baseLogFile) && baseLogFile.indexOf('\\') === -1 && baseLogFile.indexOf(':') === -1) {
+        baseLogFile = fso.BuildPath(fso.GetParentFolderName(location.pathname.substring(1)), baseLogFile);
+    }
+
+    var batch = "@echo off\r\n";
+    batch += "chcp 932 >nul\r\n";
+    batch += "setlocal enabledelayedexpansion\r\n";
+    batch += "\r\n";
+    batch += ":: ===========================================\r\n";
+    batch += ":: Robocopy自動バックアップスクリプト\r\n";
+    batch += ":: 生成日時: " + dateStr + "\r\n";
+    batch += ":: ===========================================\r\n";
+    batch += "\r\n";
+    batch += "set ERROR_OCCURRED=0\r\n";
+    batch += "\r\n";
+    batch += ":: 実行毎に一意なログファイル名を生成\r\n";
+    batch += "for /f \"tokens=1-3 delims=/ \" %%a in (\"%date%\") do (\r\n";
+    batch += "    set DATE_PART=%%c%%b%%a\r\n";
+    batch += ")\r\n";
+    batch += "for /f \"tokens=1-3 delims=:. \" %%a in (\"%time%\") do (\r\n";
+    batch += "    set TIME_PART=%%a%%b%%c\r\n";
+    batch += ")\r\n";
+    batch += ":: 時刻の先頭スペースを0に置換\r\n";
+    batch += "set TIME_PART=%TIME_PART: =0%\r\n";
+    batch += "\r\n";
+    batch += "set LOG_FILE=\"" + baseLogFile + "_%DATE_PART%_%TIME_PART%.txt\"\r\n";
+    batch += "set TEMP_LOG=\"" + fso.GetParentFolderName(baseLogFile) + "\\robocopy_temp_%DATE_PART%_%TIME_PART%.log\"\r\n";
+    batch += "\r\n";
+    batch += ":: ログファイルにヘッダーを出力\r\n";
+    batch += "echo =========================================== > %LOG_FILE%\r\n";
+    batch += "echo Robocopy自動バックアップ実行ログ >> %LOG_FILE%\r\n";
+    batch += "echo 実行開始: %date% %time% >> %LOG_FILE%\r\n";
+    batch += "echo =========================================== >> %LOG_FILE%\r\n";
+    batch += "echo コピー元: " + source + " >> %LOG_FILE%\r\n";
+    batch += "echo コピー先: " + dest + " >> %LOG_FILE%\r\n";
+    batch += "echo. >> %LOG_FILE%\r\n";
+    batch += "\r\n";
+
+    // ネットワーク認証（コピー元）
+    if (isNetworkPath(source)) {
+        var sourceUsername = document.getElementById('sourceUsername').value;
+        var sourcePassword = document.getElementById('sourcePassword').value;
+        var sourceDomain = document.getElementById('sourceDomain').value;
+
+        if (sourceUsername) {
+            var serverPath = "\\\\" + source.split("\\")[2];
+            var username = escapeBatchString(sourceUsername);
+            var password = escapeBatchPassword(sourcePassword);
+            var domain = escapeBatchString(sourceDomain);
+            var userPart = domain ? domain + "\\" + username : username;
+
+            batch += ":: コピー元ネットワーク認証\r\n";
+            batch += "echo [%date% %time%] コピー元ネットワーク認証中... >> %LOG_FILE%\r\n";
+            batch += "echo コピー元サーバー: " + serverPath + " >> %LOG_FILE%\r\n";
+            batch += "echo ユーザー: " + userPart + " >> %LOG_FILE%\r\n";
+            batch += "\r\n";
+            batch += ":: 既存の接続を切断\r\n";
+            batch += "net use \"" + serverPath + "\" /delete /y >nul 2>&1\r\n";
+            batch += "\r\n";
+            batch += ":: 新しい接続を確立\r\n";
+            batch += "net use \"" + serverPath + "\" " + password + " /user:\"" + userPart + "\" /persistent:no\r\n";
+            batch += "if !errorlevel! neq 0 (\r\n";
+            batch += "    echo [%date% %time%] ERROR: コピー元ネットワーク認証に失敗 ^(エラーコード: !errorlevel!^) >> %LOG_FILE%\r\n";
+            batch += "    echo 詳細: net use コマンドが失敗しました >> %LOG_FILE%\r\n";
+            batch += "    set ERROR_OCCURRED=1\r\n";
+            batch += "    goto :CLEANUP\r\n";
+            batch += ")\r\n";
+            batch += "echo [%date% %time%] コピー元ネットワーク認証成功 >> %LOG_FILE%\r\n";
+            batch += "\r\n";
+        }
+    }
+
+    // ネットワーク認証（コピー先）
+    if (isNetworkPath(dest)) {
+        var destUsername = document.getElementById('destUsername').value;
+        var destPassword = document.getElementById('destPassword').value;
+        var destDomain = document.getElementById('destDomain').value;
+
+        if (destUsername) {
+            var destServerPath = "\\\\" + dest.split("\\")[2];
+            var username = escapeBatchString(destUsername);
+            var password = escapeBatchPassword(destPassword);
+            var domain = escapeBatchString(destDomain);
+            var userPart = domain ? domain + "\\" + username : username;
+
+            // コピー元と同じサーバーかチェック
+            var sourceServerPath = "";
+            if (isNetworkPath(source)) {
+                sourceServerPath = "\\\\" + source.split("\\")[2];
+            }
+
+            if (destServerPath !== sourceServerPath) {  // 異なるサーバーの場合のみ認証
+                batch += ":: コピー先ネットワーク認証\r\n";
+                batch += "echo [%date% %time%] コピー先ネットワーク認証中... >> %LOG_FILE%\r\n";
+                batch += "echo コピー先サーバー: " + destServerPath + " >> %LOG_FILE%\r\n";
+                batch += "echo ユーザー: " + userPart + " >> %LOG_FILE%\r\n";
+                batch += "\r\n";
+                batch += ":: 既存の接続を切断\r\n";
+                batch += "net use \"" + destServerPath + "\" /delete /y >nul 2>&1\r\n";
+                batch += "\r\n";
+                batch += ":: 新しい接続を確立\r\n";
+                batch += "net use \"" + destServerPath + "\" " + password + " /user:\"" + userPart + "\" /persistent:no\r\n";
+                batch += "if !errorlevel! neq 0 (\r\n";
+                batch += "    echo [%date% %time%] ERROR: コピー先ネットワーク認証に失敗 ^(エラーコード: !errorlevel!^) >> %LOG_FILE%\r\n";
+                batch += "    echo 詳細: net use コマンドが失敗しました >> %LOG_FILE%\r\n";
+                batch += "    set ERROR_OCCURRED=1\r\n";
+                batch += "    goto :CLEANUP\r\n";
+                batch += ")\r\n";
+                batch += "echo [%date% %time%] コピー先ネットワーク認証成功 >> %LOG_FILE%\r\n";
+                batch += "\r\n";
+            } else {
+                batch += "echo [%date% %time%] コピー先は同じサーバーのため認証をスキップ >> %LOG_FILE%\r\n";
+                batch += "\r\n";
+            }
+        }
+    }
+
+    // 接続確認とRobocopy実行
+    batch += ":: フォルダアクセス確認\r\n";
+    batch += "echo [%date% %time%] フォルダアクセス確認中... >> %LOG_FILE%\r\n";
+    batch += "\r\n";
+    batch += ":: コピー元フォルダの確認\r\n";
+    batch += "if not exist \"" + source + "\" (\r\n";
+    batch += "    echo [%date% %time%] ERROR: コピー元フォルダにアクセスできません: " + source + " >> %LOG_FILE%\r\n";
+    batch += "    set ERROR_OCCURRED=1\r\n";
+    batch += "    goto :CLEANUP\r\n";
+    batch += ")\r\n";
+    batch += "echo [%date% %time%] コピー元フォルダアクセス確認OK >> %LOG_FILE%\r\n";
+    batch += "\r\n";
+    batch += ":: コピー先フォルダの確認（存在しない場合は作成を試行）\r\n";
+    batch += "if not exist \"" + dest + "\" (\r\n";
+    batch += "    echo [%date% %time%] コピー先フォルダが存在しないため作成を試行: " + dest + " >> %LOG_FILE%\r\n";
+    batch += "    mkdir \"" + dest + "\" 2>>%LOG_FILE%\r\n";
+    batch += "    if !errorlevel! neq 0 (\r\n";
+    batch += "        echo [%date% %time%] ERROR: コピー先フォルダを作成できません: " + dest + " >> %LOG_FILE%\r\n";
+    batch += "        set ERROR_OCCURRED=1\r\n";
+    batch += "        goto :CLEANUP\r\n";
+    batch += "    )\r\n";
+    batch += ")\r\n";
+    batch += "echo [%date% %time%] コピー先フォルダアクセス確認OK >> %LOG_FILE%\r\n";
+    batch += "\r\n";
+    batch += ":: Robocopy実行\r\n";
+    batch += "echo [%date% %time%] Robocopy実行開始 >> %LOG_FILE%\r\n";
+    batch += "echo コマンド: robocopy \"" + source + "\" \"" + dest + "\" " + options + " >> %LOG_FILE%\r\n";
+    batch += "echo ---------------------------------------- >> %LOG_FILE%\r\n";
+    batch += "\r\n";
+    batch += ":: 既存の一時ログファイルを削除\r\n";
+    batch += "if exist %TEMP_LOG% del %TEMP_LOG%\r\n";
+    batch += "\r\n";
+    batch += ":: robocopyを実行（一時ログファイルに出力）\r\n";
+    batch += "robocopy \"" + source + "\" \"" + dest + "\" " + options + " > %TEMP_LOG% 2>&1\r\n";
+    batch += "set ROBOCOPY_EXIT_CODE=!errorlevel!\r\n";
+    batch += "\r\n";
+    batch += ":: robocopyの出力をメインログファイルに統合\r\n";
+    batch += "if exist %TEMP_LOG% (\r\n";
+    batch += "    type %TEMP_LOG% >> %LOG_FILE%\r\n";
+    batch += "    del %TEMP_LOG%\r\n";
+    batch += ") else (\r\n";
+    batch += "    echo robocopyの出力ファイルが見つかりません >> %LOG_FILE%\r\n";
+    batch += ")\r\n";
+    batch += "\r\n";
+    batch += "echo ---------------------------------------- >> %LOG_FILE%\r\n";
+    batch += "\r\n";
+    batch += ":: Robocopy結果判定（0-7は正常、8以上はエラー）\r\n";
+    batch += "if !ROBOCOPY_EXIT_CODE! LSS 8 (\r\n";
+    batch += "    echo [%date% %time%] Robocopy実行成功 ^(戻り値: !ROBOCOPY_EXIT_CODE!^) >> %LOG_FILE%\r\n";
+    batch += "    set BACKUP_SUCCESS=1\r\n";
+    batch += ") else (\r\n";
+    batch += "    echo [%date% %time%] Robocopy実行失敗 ^(戻り値: !ROBOCOPY_EXIT_CODE!^) >> %LOG_FILE%\r\n";
+    batch += "    set BACKUP_SUCCESS=0\r\n";
+    batch += "    set ERROR_OCCURRED=1\r\n";
+    batch += ")\r\n";
+    batch += "\r\n";
+
+    // メール送信（フレキシブル対応）
+    if (document.getElementById('emailEnabled').checked) {
+        var taskName = document.getElementById('taskName').value;
+        var psScriptName = taskName + "_batch_mail.ps1";
+        var psScriptPath = fso.BuildPath(fso.GetParentFolderName(location.pathname.substring(1)), psScriptName);
+
+        batch += ":: メール送信（フレキシブル認証）\r\n";
+        batch += "echo [%date% %time%] メール送信準備中... >> %LOG_FILE%\r\n";
+        batch += "echo PowerShellスクリプトパス: " + psScriptPath + " >> %LOG_FILE%\r\n";
+        batch += "\r\n";
+        batch += ":: PowerShellスクリプトの存在確認\r\n";
+        batch += "if not exist \"" + psScriptPath + "\" (\r\n";
+        batch += "    echo [%date% %time%] WARNING: PowerShellスクリプトが見つかりません >> %LOG_FILE%\r\n";
+        batch += "    echo ファイルパス: " + psScriptPath + " >> %LOG_FILE%\r\n";
+        batch += "    echo カレントディレクトリ: %CD% >> %LOG_FILE%\r\n";
+        batch += "    echo メール送信をスキップします >> %LOG_FILE%\r\n";
+        batch += "    goto :SKIP_MAIL\r\n";
+        batch += ")\r\n";
+        batch += "\r\n";
+        batch += "echo [%date% %time%] メール送信中... >> %LOG_FILE%\r\n";
+        batch += ":: PowerShellスクリプトにログファイル名を渡して実行\r\n";
+        batch += "powershell -ExecutionPolicy Bypass -File \"" + psScriptPath + "\" !BACKUP_SUCCESS! %LOG_FILE% >> %LOG_FILE% 2>&1\r\n";
+        batch += "if !errorlevel! neq 0 (\r\n";
+        batch += "    echo [%date% %time%] WARNING: メール送信に失敗 >> %LOG_FILE%\r\n";
+        batch += ") else (\r\n";
+        batch += "    echo [%date% %time%] メール送信完了 >> %LOG_FILE%\r\n";
+        batch += ")\r\n";
+        batch += "\r\n";
+        batch += ":SKIP_MAIL\r\n";
+        batch += "\r\n";
+    }
+
+    // クリーンアップ
+    batch += ":CLEANUP\r\n";
+    batch += ":: クリーンアップ開始\r\n";
+    batch += "echo [%date% %time%] クリーンアップ開始 >> %LOG_FILE%\r\n";
+    batch += "\r\n";
+    batch += ":: 一時ファイルの削除\r\n";
+    batch += "if exist %TEMP_LOG% (\r\n";
+    batch += "    del %TEMP_LOG%\r\n";
+    batch += "    echo [%date% %time%] 一時ログファイルを削除 >> %LOG_FILE%\r\n";
+    batch += ")\r\n";
+    batch += "\r\n";
+    batch += ":: ネットワーク接続切断\r\n";
+
+    // コピー元のネットワーク切断
+    if (isNetworkPath(source) && document.getElementById('sourceUsername').value) {
+        var serverPath = "\\\\" + source.split("\\")[2];
+        batch += "net use \"" + serverPath + "\" /delete /y >nul 2>&1\r\n";
+        batch += "echo [%date% %time%] コピー元ネットワーク接続切断: " + serverPath + " >> %LOG_FILE%\r\n";
+    }
+
+    // コピー先のネットワーク切断
+    if (isNetworkPath(dest) && document.getElementById('destUsername').value) {
+        var destServerPath = "\\\\" + dest.split("\\")[2];
+        // 同じサーバーでない場合のみ切断
+        var sourceServerPath = isNetworkPath(source) ? "\\\\" + source.split("\\")[2] : "";
+        if (destServerPath !== sourceServerPath) {
+            batch += "net use \"" + destServerPath + "\" /delete /y >nul 2>&1\r\n";
+            batch += "echo [%date% %time%] コピー先ネットワーク接続切断: " + destServerPath + " >> %LOG_FILE%\r\n";
+        }
+    }
+
+    batch += "\r\n";
+    batch += ":: 終了処理\r\n";
+    batch += "echo [%date% %time%] スクリプト終了 ^(エラーフラグ: !ERROR_OCCURRED!^) >> %LOG_FILE%\r\n";
+    batch += "echo =========================================== >> %LOG_FILE%\r\n";
+    batch += "\r\n";
+    batch += ":: 終了コードの設定\r\n";
+    batch += "if !ERROR_OCCURRED! equ 1 (\r\n";
+    batch += "    exit /b 1\r\n";
+    batch += ") else (\r\n";
+    batch += "    exit /b !ROBOCOPY_EXIT_CODE!\r\n";
+    batch += ")\r\n";
+
+    return batch;
+}
+
+function padZero(num) {
+    var n = parseInt(num, 10);
+    return n < 10 ? "0" + n : "" + n;
+}
+
+// ======================================
+// PowerShellメールスクリプト生成
+// ======================================
+
+function generateMailScript() {
+    var smtpServer = escapePowerShellString(document.getElementById('smtpServer').value.trim());
+    var smtpPort = document.getElementById('smtpPort').value.trim();
+    var senderEmail = escapePowerShellString(document.getElementById('senderEmail').value.trim());
+    var senderPassword = escapePowerShellString(document.getElementById('senderPassword').value.trim());
+    var recipientEmail = escapePowerShellString(document.getElementById('recipientEmail').value.trim());
+
+    var connectionSecurity = document.getElementById('connectionSecurity').value;
+    var authMethod = document.getElementById('authMethod').value;
+    var useSSL = connectionSecurity === "SSL/TLS";
+    var useSTARTTLS = connectionSecurity === "STARTTLS";
+
+    var sourcePath = escapePowerShellString(document.getElementById('source').value);
+    var destPath = escapePowerShellString(document.getElementById('dest').value);
+
+    var ps1 = "# RCScheduler バッチ実行用メール送信\r\n";
+    ps1 += "param(\r\n";
+    ps1 += "    [string]$BackupSuccess = \"0\",\r\n";
+    ps1 += "    [string]$LogFilePath = \"\"\r\n";
+    ps1 += ")\r\n\r\n";
+
+    ps1 += "$ErrorActionPreference = \"Stop\"\r\n\r\n";
+
+    ps1 += "# 設定\r\n";
+    ps1 += "$SmtpServer = \"" + smtpServer + "\"\r\n";
+    ps1 += "$SmtpPort = " + smtpPort + "\r\n";
+    ps1 += "$SenderEmail = \"" + senderEmail + "\"\r\n";
+    ps1 += "$SenderPassword = \"" + senderPassword + "\"\r\n";
+    ps1 += "$RecipientEmail = \"" + recipientEmail + "\"\r\n";
+    ps1 += "$UseSSL = " + (useSSL ? "$true" : "$false") + "\r\n";
+    ps1 += "$UseSTARTTLS = " + (useSTARTTLS ? "$true" : "$false") + "\r\n";
+    ps1 += "$AuthMethod = \"" + authMethod + "\"\r\n\r\n";
+
+    ps1 += "# 件名設定\r\n";
+    ps1 += "if ($BackupSuccess -eq \"1\") {\r\n";
+    ps1 += "    $Subject = \"Robocopyバックアップ結果 - 成功\"\r\n";
+    ps1 += "    $Result = \"成功\"\r\n";
+    ps1 += "} else {\r\n";
+    ps1 += "    $Subject = \"Robocopyバックアップ結果 - 失敗\"\r\n";
+    ps1 += "    $Result = \"失敗\"\r\n";
+    ps1 += "}\r\n\r\n";
+
+    ps1 += "function ConvertTo-Base64($text) {\r\n";
+    ps1 += "    $bytes = [System.Text.Encoding]::UTF8.GetBytes($text)\r\n";
+    ps1 += "    return [System.Convert]::ToBase64String($bytes)\r\n";
+    ps1 += "}\r\n\r\n";
+
+    ps1 += "function Send-AuthCommand($writer, $reader, $authMethod, $username, $password) {\r\n";
+    ps1 += "    switch ($authMethod) {\r\n";
+    ps1 += "        \"CRAM-MD5\" {\r\n";
+    ps1 += "            $writer.WriteLine(\"AUTH CRAM-MD5\")\r\n";
+    ps1 += "            $writer.Flush()\r\n";
+    ps1 += "            $response = $reader.ReadLine()\r\n";
+    ps1 += "            \r\n";
+    ps1 += "            if ($response.StartsWith(\"334\")) {\r\n";
+    ps1 += "                $challenge = $response.Substring(4)\r\n";
+    ps1 += "                $challengeBytes = [System.Convert]::FromBase64String($challenge)\r\n";
+    ps1 += "                $challengeText = [System.Text.Encoding]::UTF8.GetString($challengeBytes)\r\n";
+    ps1 += "                \r\n";
+    ps1 += "                $hmac = New-Object System.Security.Cryptography.HMACMD5\r\n";
+    ps1 += "                $hmac.Key = [System.Text.Encoding]::UTF8.GetBytes($password)\r\n";
+    ps1 += "                $hash = $hmac.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($challengeText))\r\n";
+    ps1 += "                $hashHex = [System.BitConverter]::ToString($hash) -replace \"-\", \"\"\r\n";
+    ps1 += "                \r\n";
+    ps1 += "                $cramResponse = \"$username \" + $hashHex.ToLower()\r\n";
+    ps1 += "                $encodedResponse = ConvertTo-Base64 $cramResponse\r\n";
+    ps1 += "                $writer.WriteLine($encodedResponse)\r\n";
+    ps1 += "                $writer.Flush()\r\n";
+    ps1 += "            }\r\n";
+    ps1 += "        }\r\n";
+    ps1 += "        \"LOGIN\" {\r\n";
+    ps1 += "            $writer.WriteLine(\"AUTH LOGIN\")\r\n";
+    ps1 += "            $writer.Flush()\r\n";
+    ps1 += "            $response = $reader.ReadLine()\r\n";
+    ps1 += "            if ($response.StartsWith(\"334\")) {\r\n";
+    ps1 += "                $writer.WriteLine((ConvertTo-Base64 $username))\r\n";
+    ps1 += "                $writer.Flush()\r\n";
+    ps1 += "                $response = $reader.ReadLine()\r\n";
+    ps1 += "                if ($response.StartsWith(\"334\")) {\r\n";
+    ps1 += "                    $writer.WriteLine((ConvertTo-Base64 $password))\r\n";
+    ps1 += "                    $writer.Flush()\r\n";
+    ps1 += "                }\r\n";
+    ps1 += "            }\r\n";
+    ps1 += "        }\r\n";
+    ps1 += "        \"PLAIN\" {\r\n";
+    ps1 += "            $authString = ConvertTo-Base64(\"`0$username`0$password\")\r\n";
+    ps1 += "            $writer.WriteLine(\"AUTH PLAIN $authString\")\r\n";
+    ps1 += "            $writer.Flush()\r\n";
+    ps1 += "        }\r\n";
+    ps1 += "    }\r\n";
+    ps1 += "    \r\n";
+    ps1 += "    $response = $reader.ReadLine()\r\n";
+    ps1 += "    return $response.StartsWith(\"235\")\r\n";
+    ps1 += "}\r\n\r\n";
+
+    ps1 += "try {\r\n";
+    ps1 += "    # 接続\r\n";
+    ps1 += "    $tcpClient = New-Object System.Net.Sockets.TcpClient\r\n";
+    ps1 += "    $tcpClient.Connect($SmtpServer, $SmtpPort)\r\n";
+    ps1 += "    $stream = $tcpClient.GetStream()\r\n";
+    ps1 += "    \r\n";
+    ps1 += "    # SSL/STARTTLS処理\r\n";
+    ps1 += "    if ($UseSSL) {\r\n";
+    ps1 += "        $sslStream = New-Object System.Net.Security.SslStream($stream)\r\n";
+    ps1 += "        $sslStream.AuthenticateAsClient($SmtpServer)\r\n";
+    ps1 += "        $stream = $sslStream\r\n";
+    ps1 += "        Start-Sleep -Milliseconds 500\r\n";
+    ps1 += "    }\r\n";
+    ps1 += "    \r\n";
+    ps1 += "    $reader = New-Object System.IO.StreamReader($stream)\r\n";
+    ps1 += "    $writer = New-Object System.IO.StreamWriter($stream)\r\n";
+    ps1 += "    \r\n";
+    ps1 += "    # SMTP通信\r\n";
+    ps1 += "    $response = $reader.ReadLine()  # 220応答\r\n";
+    ps1 += "    \r\n";
+    ps1 += "    $writer.WriteLine(\"EHLO localhost\")\r\n";
+    ps1 += "    $writer.Flush()\r\n";
+    ps1 += "    do { $response = $reader.ReadLine() } while ($response.StartsWith(\"250-\"))\r\n";
+    ps1 += "    \r\n";
+    ps1 += "    if ($UseSTARTTLS -and -not $UseSSL) {\r\n";
+    ps1 += "        $writer.WriteLine(\"STARTTLS\")\r\n";
+    ps1 += "        $writer.Flush()\r\n";
+    ps1 += "        $response = $reader.ReadLine()\r\n";
+    ps1 += "        if ($response.StartsWith(\"220\")) {\r\n";
+    ps1 += "            $sslStream = New-Object System.Net.Security.SslStream($stream)\r\n";
+    ps1 += "            $sslStream.AuthenticateAsClient($SmtpServer)\r\n";
+    ps1 += "            $stream = $sslStream\r\n";
+    ps1 += "            $reader = New-Object System.IO.StreamReader($stream)\r\n";
+    ps1 += "            $writer = New-Object System.IO.StreamWriter($stream)\r\n";
+    ps1 += "            \r\n";
+    ps1 += "            $writer.WriteLine(\"EHLO localhost\")\r\n";
+    ps1 += "            $writer.Flush()\r\n";
+    ps1 += "            do { $response = $reader.ReadLine() } while ($response.StartsWith(\"250-\"))\r\n";
+    ps1 += "        }\r\n";
+    ps1 += "    }\r\n";
+    ps1 += "    \r\n";
+    ps1 += "    # 認証\r\n";
+    ps1 += "    if (-not (Send-AuthCommand $writer $reader $AuthMethod $SenderEmail $SenderPassword)) {\r\n";
+    ps1 += "        throw \"認証失敗\"\r\n";
+    ps1 += "    }\r\n";
+    ps1 += "    \r\n";
+    ps1 += "    # メール送信\r\n";
+    ps1 += "    $writer.WriteLine(\"MAIL FROM:<$SenderEmail>\")\r\n";
+    ps1 += "    $writer.Flush()\r\n";
+    ps1 += "    $reader.ReadLine()\r\n";
+    ps1 += "    \r\n";
+    ps1 += "    $writer.WriteLine(\"RCPT TO:<$RecipientEmail>\")\r\n";
+    ps1 += "    $writer.Flush()\r\n";
+    ps1 += "    $reader.ReadLine()\r\n";
+    ps1 += "    \r\n";
+    ps1 += "    $writer.WriteLine(\"DATA\")\r\n";
+    ps1 += "    $writer.Flush()\r\n";
+    ps1 += "    $reader.ReadLine()\r\n";
+    ps1 += "    \r\n";
+    ps1 += "    # メール内容\r\n";
+    ps1 += "    $writer.WriteLine(\"From: $SenderEmail\")\r\n";
+    ps1 += "    $writer.WriteLine(\"To: $RecipientEmail\")\r\n";
+    ps1 += "    $writer.WriteLine(\"Subject: $Subject\")\r\n";
+    ps1 += "    $writer.WriteLine(\"Date: $(Get-Date -Format 'r')\")\r\n";
+    ps1 += "    $writer.WriteLine(\"Content-Type: text/plain; charset=utf-8\")\r\n";
+    ps1 += "    $writer.WriteLine(\"\")\r\n";
+    ps1 += "    $writer.WriteLine(\"Robocopyバックアップの実行結果をお知らせします。\")\r\n";
+    ps1 += "    $writer.WriteLine(\"\")\r\n";
+    ps1 += "    $writer.WriteLine(\"実行日時: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')\")\r\n";
+    ps1 += "    $writer.WriteLine(\"結果: $Result\")\r\n";
+    ps1 += "    $writer.WriteLine(\"コピー元: " + sourcePath + "\")\r\n";
+    ps1 += "    $writer.WriteLine(\"コピー先: " + destPath + "\")\r\n";
+    ps1 += "    $writer.WriteLine(\"\")\r\n";
+    ps1 += "    if ($LogFilePath -and (Test-Path $LogFilePath)) {\r\n";
+    ps1 += "        $writer.WriteLine(\"ログファイル: $LogFilePath\")\r\n";
+    ps1 += "        $writer.WriteLine(\"\")\r\n";
+    ps1 += "        $writer.WriteLine(\"=== ログ内容（全文） ===\")\r\n";
+    ps1 += "        $logLines = Get-Content $LogFilePath -ErrorAction SilentlyContinue\r\n";
+    ps1 += "        if ($logLines) {\r\n";
+    ps1 += "            foreach ($line in $logLines) {\r\n";
+    ps1 += "                $writer.WriteLine($line)\r\n";
+    ps1 += "            }\r\n";
+    ps1 += "        } else {\r\n";
+    ps1 += "            $writer.WriteLine(\"ログファイルの内容を読み取れませんでした\")\r\n";
+    ps1 += "        }\r\n";
+    ps1 += "    } else {\r\n";
+    ps1 += "        $writer.WriteLine(\"ログファイルが見つかりません: $LogFilePath\")\r\n";
+    ps1 += "    }\r\n";
+    ps1 += "    $writer.WriteLine(\".\")\r\n";
+    ps1 += "    $writer.Flush()\r\n";
+    ps1 += "    \r\n";
+    ps1 += "    $response = $reader.ReadLine()\r\n";
+    ps1 += "    if (-not $response.StartsWith(\"250\")) {\r\n";
+    ps1 += "        throw \"送信失敗: $response\"\r\n";
+    ps1 += "    }\r\n";
+    ps1 += "    \r\n";
+    ps1 += "    $writer.WriteLine(\"QUIT\")\r\n";
+    ps1 += "    $writer.Flush()\r\n";
+    ps1 += "    \r\n";
+    ps1 += "    Write-Output \"メール送信完了\"\r\n";
+    ps1 += "    exit 0\r\n";
+    ps1 += "    \r\n";
+    ps1 += "} catch {\r\n";
+    ps1 += "    Write-Output \"メール送信エラー: $($_.Exception.Message)\"\r\n";
+    ps1 += "    exit 1\r\n";
+    ps1 += "} finally {\r\n";
+    ps1 += "    if ($stream) { $stream.Close() }\r\n";
+    ps1 += "    if ($tcpClient) { $tcpClient.Close() }\r\n";
+    ps1 += "}\r\n";
+
+    return ps1;
+}
+
+// ======================================
+// タスクスケジューラ操作
+// ======================================
+
+function createScheduledTask() {
+    // バリデーション
+    var source = document.getElementById('source').value;
+    var dest = document.getElementById('dest').value;
+    var taskName = document.getElementById('taskName').value;
+
+    if (!source || !dest) {
+        alert("コピー元とコピー先を指定してください。");
+        return;
+    }
+
+    if (!taskName) {
+        alert("タスク名を入力してください。");
+        return;
+    }
+
+    if (!isAdmin()) {
+        alert("タスクスケジューラへの登録には管理者権限が必要です。");
+        return;
+    }
+
+    try {
+        logMessage("タスクスケジューラへの登録を開始します...");
+
+        // 設定を保存
+        saveConfig();
+
+        // バッチスクリプトを生成
+        var batchContent = generateBatchScript();
+        var batchPath = fso.BuildPath(fso.GetParentFolderName(location.pathname.substring(1)),
+                                      taskName + ".bat");
+
+        var file = fso.CreateTextFile(batchPath, true, false);
+        file.Write(batchContent);
+        file.Close();
+
+        logMessage("バッチスクリプトを作成しました: " + batchPath);
+
+        // メール送信スクリプトを生成（メール有効時）
+        if (document.getElementById('emailEnabled').checked) {
+            var mailScript = generateMailScript();
+            var mailScriptPath = fso.BuildPath(fso.GetParentFolderName(location.pathname.substring(1)),
+                                               taskName + "_mail.ps1");
+
+            var mailFile = fso.CreateTextFile(mailScriptPath, true, true); // UTF-8 BOM
+            mailFile.Write(mailScript);
+            mailFile.Close();
+
+            logMessage("メールスクリプトを作成しました: " + mailScriptPath);
+        }
+
+        // スケジュールタスク作成コマンド構築
+        var frequency = document.querySelector('input[name="frequency"]:checked').value;
+        var hour = document.getElementById('hour').value;
+        var minute = document.getElementById('minute').value;
+
+        // 時刻のバリデーション
+        if (!hour || !minute) {
+            alert("実行時刻を入力してください。");
+            return;
+        }
+
+        // 数値に変換
+        hour = parseInt(hour, 10);
+        minute = parseInt(minute, 10);
+
+        // 範囲チェック
+        if (isNaN(hour) || hour < 0 || hour > 23) {
+            alert("時間は0～23の範囲で入力してください。");
+            return;
+        }
+
+        if (isNaN(minute) || minute < 0 || minute > 59) {
+            alert("分は0～59の範囲で入力してください。");
+            return;
+        }
+
+        var startTime = padZero(hour) + ":" + padZero(minute);
+
+        var scheduleType = "";
+        if (frequency === "DAILY") {
+            scheduleType = "/SC DAILY";
+        } else {
+            var weekdays = getSelectedWeekdays();
+            if (!weekdays) {
+                alert("毎週実行の場合は、実行曜日を選択してください。");
+                return;
+            }
+            scheduleType = "/SC WEEKLY /D " + weekdays;
+        }
+
+        var cmd = 'schtasks /CREATE /TN "' + taskName + '" ' +
+                  '/TR "\\"' + batchPath + '\\"" ' +
+                  scheduleType + ' ' +
+                  '/ST ' + startTime + ' ' +
+                  '/RU "SYSTEM" ' +
+                  '/RL HIGHEST /F';
+
+        logMessage("タスクスケジューラコマンド実行中...");
+        logMessage("実行時刻: " + startTime);
+        logMessage("コマンド: " + cmd);
+
+        // HTAではWScript.Sleepが使えないため、shell.Runで同期実行
+        // 出力を一時ファイルにリダイレクト（関数ごとに異なるファイル名を使用）
+        var tempOutput = fso.BuildPath(fso.GetSpecialFolder(2), "rcscheduler_create_output.txt");
+        var tempError = fso.BuildPath(fso.GetSpecialFolder(2), "rcscheduler_create_error.txt");
+
+        var cmdFull = 'cmd.exe /c ' + cmd + ' > "' + tempOutput + '" 2> "' + tempError + '"';
+        var exitCode = shell.Run(cmdFull, 0, true); // 第3引数true = 完了を待つ
+
+        // 出力を読み取り
+        var output = "";
+        var error = "";
+
+        if (fso.FileExists(tempOutput)) {
+            var fileObj = fso.GetFile(tempOutput);
+            if (fileObj.Size > 0) {
+                var outFile = fso.OpenTextFile(tempOutput, 1);
+                output = outFile.ReadAll();
+                outFile.Close();
+            }
+            fso.DeleteFile(tempOutput);
+        }
+
+        if (fso.FileExists(tempError)) {
+            var fileObj = fso.GetFile(tempError);
+            if (fileObj.Size > 0) {
+                var errFile = fso.OpenTextFile(tempError, 1);
+                error = errFile.ReadAll();
+                errFile.Close();
+            }
+            fso.DeleteFile(tempError);
+        }
+
+        if (exitCode === 0) {
+            logMessage("タスクスケジューラへの登録が完了しました", "success");
+            logMessage("タスク名: " + taskName);
+            logMessage("次回実行時刻: " + startTime);
+            alert("タスクスケジューラへの登録が完了しました。\n\nタスク名: " + taskName + "\n次回実行時刻: " + startTime);
+            updateTaskStatus();
+        } else {
+            logMessage("タスク登録エラー: " + error, "error");
+            alert("タスク登録に失敗しました。\n\n" + error);
+        }
+
+    } catch(e) {
+        logMessage("タスク登録エラー: " + e.message, "error");
+        alert("タスク登録エラー: " + e.message);
+    }
+}
+
+function deleteScheduledTask() {
+    var taskName = document.getElementById('taskName').value;
+
+    if (!taskName) {
+        alert("タスク名を入力してください。");
+        return;
+    }
+
+    if (!isAdmin()) {
+        alert("タスクの削除には管理者権限が必要です。");
+        return;
+    }
+
+    if (!confirm("タスク「" + taskName + "」を削除してもよろしいですか？")) {
+        return;
+    }
+
+    try {
+        logMessage("タスクを削除しています...");
+
+        var cmd = 'schtasks /DELETE /TN "' + taskName + '" /F';
+
+        // HTAではWScript.Sleepが使えないため、shell.Runで同期実行
+        var tempOutput = fso.BuildPath(fso.GetSpecialFolder(2), "rcscheduler_delete_output.txt");
+        var tempError = fso.BuildPath(fso.GetSpecialFolder(2), "rcscheduler_delete_error.txt");
+
+        var cmdFull = 'cmd.exe /c ' + cmd + ' > "' + tempOutput + '" 2> "' + tempError + '"';
+        var exitCode = shell.Run(cmdFull, 0, true);
+
+        // 出力を読み取り
+        var output = "";
+        var error = "";
+
+        if (fso.FileExists(tempOutput)) {
+            var fileObj = fso.GetFile(tempOutput);
+            if (fileObj.Size > 0) {
+                var outFile = fso.OpenTextFile(tempOutput, 1);
+                output = outFile.ReadAll();
+                outFile.Close();
+            }
+            fso.DeleteFile(tempOutput);
+        }
+
+        if (fso.FileExists(tempError)) {
+            var fileObj = fso.GetFile(tempError);
+            if (fileObj.Size > 0) {
+                var errFile = fso.OpenTextFile(tempError, 1);
+                error = errFile.ReadAll();
+                errFile.Close();
+            }
+            fso.DeleteFile(tempError);
+        }
+
+        if (exitCode === 0) {
+            logMessage("タスクを削除しました", "success");
+
+            // バッチファイルも削除
+            var batchPath = fso.BuildPath(fso.GetParentFolderName(location.pathname.substring(1)),
+                                          taskName + ".bat");
+            if (fso.FileExists(batchPath)) {
+                fso.DeleteFile(batchPath);
+                logMessage("バッチファイルを削除しました: " + batchPath);
+            }
+
+            // メールスクリプトも削除
+            var mailScriptPath = fso.BuildPath(fso.GetParentFolderName(location.pathname.substring(1)),
+                                               taskName + "_mail.ps1");
+            if (fso.FileExists(mailScriptPath)) {
+                fso.DeleteFile(mailScriptPath);
+                logMessage("メールスクリプトを削除しました: " + mailScriptPath);
+            }
+
+            alert("タスク「" + taskName + "」を削除しました。");
+            updateTaskStatus();
+        } else {
+            logMessage("タスク削除エラー: " + error, "error");
+            alert("タスク削除に失敗しました。\n\n" + error);
+        }
+
+    } catch(e) {
+        logMessage("タスク削除エラー: " + e.message, "error");
+        alert("タスク削除エラー: " + e.message);
+    }
+}
+
+function updateTaskStatus() {
+    var taskName = document.getElementById('taskName').value;
+
+    if (!taskName) {
+        document.getElementById('taskStatus').innerText = "タスク名が未設定";
+        return;
+    }
+
+    try {
+        var cmd = 'schtasks /QUERY /TN "' + taskName + '" /FO LIST /V';
+
+        // HTAではWScript.Sleepが使えないため、shell.Runで同期実行
+        var tempOutput = fso.BuildPath(fso.GetSpecialFolder(2), "rcscheduler_status_output.txt");
+        var tempError = fso.BuildPath(fso.GetSpecialFolder(2), "rcscheduler_status_error.txt");
+
+        var cmdFull = 'cmd.exe /c ' + cmd + ' > "' + tempOutput + '" 2> "' + tempError + '"';
+        var exitCode = shell.Run(cmdFull, 0, true);
+
+        // 出力を読み取り
+        var output = "";
+        var error = "";
+
+        if (fso.FileExists(tempOutput)) {
+            var fileObj = fso.GetFile(tempOutput);
+            if (fileObj.Size > 0) {
+                var outFile = fso.OpenTextFile(tempOutput, 1);
+                output = outFile.ReadAll();
+                outFile.Close();
+            }
+            fso.DeleteFile(tempOutput);
+        }
+
+        if (fso.FileExists(tempError)) {
+            var fileObj = fso.GetFile(tempError);
+            if (fileObj.Size > 0) {
+                var errFile = fso.OpenTextFile(tempError, 1);
+                error = errFile.ReadAll();
+                errFile.Close();
+            }
+            fso.DeleteFile(tempError);
+        }
+
+        if (exitCode === 0) {
+            // タスクが存在する
+            // 次回実行時刻を抽出
+            var lines = output.split("\n");
+            var nextRunTime = "不明";
+
+            for (var i = 0; i < lines.length; i++) {
+                if (lines[i].indexOf("次回の実行時刻") !== -1 || lines[i].indexOf("Next Run Time") !== -1) {
+                    nextRunTime = lines[i].split(":")[1];
+                    if (nextRunTime) {
+                        nextRunTime = nextRunTime.trim();
+                    }
+                    break;
+                }
+            }
+
+            document.getElementById('taskStatus').innerText = "登録済み - 次回実行: " + nextRunTime;
+            logMessage("タスクステータスを更新しました: 登録済み");
+        } else {
+            document.getElementById('taskStatus').innerText = "未登録";
+            logMessage("タスクステータスを更新しました: 未登録");
+        }
+
+    } catch(e) {
+        document.getElementById('taskStatus').innerText = "確認エラー";
+        logMessage("タスクステータス確認エラー: " + e.message, "error");
+    }
+}
+
+// ======================================
+// タスク履歴設定機能
+// ======================================
+
+function enableTaskHistory() {
+    if (!isAdmin()) {
+        alert("タスク履歴の有効化には管理者権限が必要です。");
+        return { success: false, message: "管理者権限が必要です" };
+    }
+
+    try {
+        logMessage("タスク履歴を有効化しています...");
+
+        var cmd = 'wevtutil set-log Microsoft-Windows-TaskScheduler/Operational /enabled:true';
+
+        // コマンド実行
+        var tempOutput = fso.BuildPath(fso.GetSpecialFolder(2), "rcscheduler_history_output.txt");
+        var tempError = fso.BuildPath(fso.GetSpecialFolder(2), "rcscheduler_history_error.txt");
+
+        var cmdFull = 'cmd.exe /c ' + cmd + ' > "' + tempOutput + '" 2> "' + tempError + '"';
+        var exitCode = shell.Run(cmdFull, 0, true);
+
+        // エラー出力を読み取り
+        var error = "";
+        if (fso.FileExists(tempError)) {
+            var fileObj = fso.GetFile(tempError);
+            if (fileObj.Size > 0) {
+                var errFile = fso.OpenTextFile(tempError, 1);
+                error = errFile.ReadAll();
+                errFile.Close();
+            }
+            fso.DeleteFile(tempError);
+        }
+
+        // 出力ファイルのクリーンアップ
+        if (fso.FileExists(tempOutput)) {
+            fso.DeleteFile(tempOutput);
+        }
+
+        if (exitCode === 0) {
+            logMessage("タスク履歴を有効化しました", "success");
+            document.getElementById('taskHistoryStatus').innerText = "有効";
+            alert("タスク履歴を有効化しました。");
+            return { success: true, message: "有効化しました" };
+        } else {
+            logMessage("タスク履歴の有効化に失敗しました: " + error, "error");
+            alert("タスク履歴の有効化に失敗しました。\n\n" + error);
+            return { success: false, message: error };
+        }
+
+    } catch(e) {
+        logMessage("タスク履歴有効化エラー: " + e.message, "error");
+        alert("タスク履歴有効化エラー: " + e.message);
+        return { success: false, message: e.message };
+    }
+}
+
+function disableTaskHistory() {
+    if (!isAdmin()) {
+        alert("タスク履歴の無効化には管理者権限が必要です。");
+        return { success: false, message: "管理者権限が必要です" };
+    }
+
+    if (!confirm("タスク履歴を無効化してもよろしいですか？\n\n※既存の履歴は保持されますが、新しい履歴は記録されなくなります。")) {
+        return { success: false, message: "キャンセルされました" };
+    }
+
+    try {
+        logMessage("タスク履歴を無効化しています...");
+
+        var cmd = 'wevtutil set-log Microsoft-Windows-TaskScheduler/Operational /enabled:false';
+
+        // コマンド実行
+        var tempOutput = fso.BuildPath(fso.GetSpecialFolder(2), "rcscheduler_history_output.txt");
+        var tempError = fso.BuildPath(fso.GetSpecialFolder(2), "rcscheduler_history_error.txt");
+
+        var cmdFull = 'cmd.exe /c ' + cmd + ' > "' + tempOutput + '" 2> "' + tempError + '"';
+        var exitCode = shell.Run(cmdFull, 0, true);
+
+        // エラー出力を読み取り
+        var error = "";
+        if (fso.FileExists(tempError)) {
+            var fileObj = fso.GetFile(tempError);
+            if (fileObj.Size > 0) {
+                var errFile = fso.OpenTextFile(tempError, 1);
+                error = errFile.ReadAll();
+                errFile.Close();
+            }
+            fso.DeleteFile(tempError);
+        }
+
+        // 出力ファイルのクリーンアップ
+        if (fso.FileExists(tempOutput)) {
+            fso.DeleteFile(tempOutput);
+        }
+
+        if (exitCode === 0) {
+            logMessage("タスク履歴を無効化しました", "success");
+            document.getElementById('taskHistoryStatus').innerText = "無効";
+            alert("タスク履歴を無効化しました。");
+            return { success: true, message: "無効化しました" };
+        } else {
+            logMessage("タスク履歴の無効化に失敗しました: " + error, "error");
+            alert("タスク履歴の無効化に失敗しました。\n\n" + error);
+            return { success: false, message: error };
+        }
+
+    } catch(e) {
+        logMessage("タスク履歴無効化エラー: " + e.message, "error");
+        alert("タスク履歴無効化エラー: " + e.message);
+        return { success: false, message: e.message };
+    }
+}
+
+function getTaskHistoryStatus(silent) {
+    // silent = trueの場合、アラートを表示しない（起動時用）
+    silent = silent || false;
+
+    try {
+        if (!silent) {
+            logMessage("タスク履歴の設定状態を確認しています...");
+        }
+
+        var cmd = 'wevtutil get-log Microsoft-Windows-TaskScheduler/Operational';
+
+        // コマンド実行
+        var tempOutput = fso.BuildPath(fso.GetSpecialFolder(2), "rcscheduler_history_status.txt");
+        var tempError = fso.BuildPath(fso.GetSpecialFolder(2), "rcscheduler_history_status_error.txt");
+
+        var cmdFull = 'cmd.exe /c ' + cmd + ' > "' + tempOutput + '" 2> "' + tempError + '"';
+        var exitCode = shell.Run(cmdFull, 0, true);
+
+        // 出力を読み取り
+        var output = "";
+        if (fso.FileExists(tempOutput)) {
+            var fileObj = fso.GetFile(tempOutput);
+            if (fileObj.Size > 0) {
+                var outFile = fso.OpenTextFile(tempOutput, 1);
+                output = outFile.ReadAll();
+                outFile.Close();
+            }
+            fso.DeleteFile(tempOutput);
+        }
+
+        // エラー出力を読み取り
+        var error = "";
+        if (fso.FileExists(tempError)) {
+            var errFileObj = fso.GetFile(tempError);
+            if (errFileObj.Size > 0) {
+                var errFile = fso.OpenTextFile(tempError, 1);
+                error = errFile.ReadAll();
+                errFile.Close();
+            }
+            fso.DeleteFile(tempError);
+        }
+
+        if (exitCode === 0 && output) {
+            // 出力から enabled 状態を解析
+            var lines = output.split("\n");
+            var enabled = false;
+
+            for (var i = 0; i < lines.length; i++) {
+                var line = lines[i].trim();
+                // "enabled: true" または "enabled: false" の形式を探す
+                if (line.toLowerCase().indexOf("enabled:") !== -1) {
+                    if (line.toLowerCase().indexOf("true") !== -1) {
+                        enabled = true;
+                    }
+                    break;
+                }
+            }
+
+            var statusText = enabled ? "有効" : "無効";
+            document.getElementById('taskHistoryStatus').innerText = statusText;
+
+            if (!silent) {
+                logMessage("タスク履歴の設定状態: " + statusText, "success");
+                alert("タスク履歴の設定状態: " + statusText);
+            }
+
+            return { enabled: enabled, message: statusText };
+        } else {
+            document.getElementById('taskHistoryStatus').innerText = "確認エラー";
+
+            if (!silent) {
+                logMessage("タスク履歴の設定状態の確認に失敗しました: " + error, "error");
+                alert("タスク履歴の設定状態の確認に失敗しました。\n\n" + error);
+            }
+
+            return { enabled: null, message: error };
+        }
+
+    } catch(e) {
+        document.getElementById('taskHistoryStatus').innerText = "確認エラー";
+
+        if (!silent) {
+            logMessage("タスク履歴設定状態確認エラー: " + e.message, "error");
+            alert("タスク履歴設定状態確認エラー: " + e.message);
+        }
+
+        return { enabled: null, message: e.message };
+    }
+}
+
+// ======================================
+// ネットワーク接続テスト
+// ======================================
+
+function testNetworkConnection(pathType) {
+    var path, username, password, domain;
+
+    if (pathType === "source") {
+        path = document.getElementById('source').value;
+        username = document.getElementById('sourceUsername').value;
+        password = document.getElementById('sourcePassword').value;
+        domain = document.getElementById('sourceDomain').value;
+    } else {
+        path = document.getElementById('dest').value;
+        username = document.getElementById('destUsername').value;
+        password = document.getElementById('destPassword').value;
+        domain = document.getElementById('destDomain').value;
+    }
+
+    if (!isNetworkPath(path)) {
+        alert("ネットワークパスが指定されていません。");
+        return;
+    }
+
+    if (!username) {
+        alert("ユーザー名を入力してください。");
+        return;
+    }
+
+    try {
+        logMessage("ネットワーク接続をテストしています...");
+
+        var serverPath = "\\\\" + path.split("\\")[2];
+
+        // 既存の接続を切断
+        var disconnectCmd = 'net use "' + serverPath + '" /delete /y';
+        shell.Run("cmd.exe /c " + disconnectCmd, 0, true);
+
+        // 認証情報を構築
+        var userPart = domain ? domain + "\\" + username : username;
+
+        // 接続テスト
+        var connectCmd = 'net use "' + serverPath + '" "' + password + '" /user:"' + userPart + '"';
+        var result = shell.Run("cmd.exe /c " + connectCmd, 0, true);
+
+        if (result === 0) {
+            alert(pathType + "への接続に成功しました。");
+            logMessage("ネットワーク接続テスト成功: " + serverPath, "success");
+
+            // テスト後は切断
+            shell.Run("cmd.exe /c " + disconnectCmd, 0, true);
+        } else {
+            alert(pathType + "への接続に失敗しました。\n\nユーザー名、パスワード、ドメインを確認してください。");
+            logMessage("ネットワーク接続テスト失敗: " + serverPath, "error");
+        }
+
+    } catch(e) {
+        alert("接続テストでエラーが発生しました。\n\n" + e.message);
+        logMessage("ネットワーク接続テストエラー: " + e.message, "error");
+    }
+}
+
+// ======================================
+// SMTP接続テスト
+// ======================================
+
+function testSmtpConnection() {
+    var smtpServer = document.getElementById('smtpServer').value.trim();
+    var smtpPort = document.getElementById('smtpPort').value.trim();
+
+    if (!smtpServer) {
+        alert("SMTPサーバーを入力してください。");
+        return;
+    }
+
+    if (!smtpPort) {
+        alert("ポート番号を入力してください。");
+        return;
+    }
+
+    // ポート番号の検証
+    var portNum = parseInt(smtpPort, 10);
+    if (isNaN(portNum) || portNum < 1 || portNum > 65535) {
+        alert("有効なポート番号を入力してください（1-65535）");
+        return;
+    }
+
+    try {
+        logMessage("SMTP接続テスト開始: " + smtpServer + ":" + smtpPort);
+
+        // 接続の保護設定を取得
+        var connectionSecurity = document.getElementById('connectionSecurity').value;
+        var useSSL = connectionSecurity === "SSL/TLS";
+
+        // PowerShellスクリプトでSMTP接続をテスト
+        var psScript = "# SMTP接続テスト（フレキシブル版）\r\n";
+        psScript += "$ErrorActionPreference = \"Stop\"\r\n\r\n";
+
+        psScript += "$SmtpServer = \"" + escapePowerShellString(smtpServer) + "\"\r\n";
+        psScript += "$SmtpPort = " + smtpPort + "\r\n";
+        psScript += "$UseSSL = " + (useSSL ? "$true" : "$false") + "\r\n";
+        psScript += "$ConnectionSecurity = \"" + connectionSecurity + "\"\r\n\r\n";
+
+        psScript += "Write-Output \"SMTP接続テスト開始: $SmtpServer`:$SmtpPort\"\r\n";
+        psScript += "Write-Output \"接続の保護: $ConnectionSecurity\"\r\n\r\n";
+
+        psScript += "try {\r\n";
+        psScript += "    # TCP接続テスト\r\n";
+        psScript += "    $tcpTest = Test-NetConnection -ComputerName $SmtpServer -Port $SmtpPort -WarningAction SilentlyContinue\r\n";
+        psScript += "    \r\n";
+        psScript += "    if ($tcpTest.TcpTestSucceeded) {\r\n";
+        psScript += "        Write-Output \"TCP接続成功\"\r\n";
+        psScript += "        \r\n";
+        psScript += "        # SMTP接続テスト\r\n";
+        psScript += "        $tcpClient = New-Object System.Net.Sockets.TcpClient\r\n";
+        psScript += "        $tcpClient.ReceiveTimeout = 10000\r\n";
+        psScript += "        $tcpClient.SendTimeout = 10000\r\n";
+        psScript += "        $tcpClient.Connect($SmtpServer, $SmtpPort)\r\n";
+        psScript += "        \r\n";
+        psScript += "        if ($tcpClient.Connected) {\r\n";
+        psScript += "            $stream = $tcpClient.GetStream()\r\n";
+        psScript += "            \r\n";
+        psScript += "            # SSL/TLS処理\r\n";
+        psScript += "            if ($UseSSL) {\r\n";
+        psScript += "                Write-Output \"SSL/TLS暗号化開始...\"\r\n";
+        psScript += "                $sslStream = New-Object System.Net.Security.SslStream($stream)\r\n";
+        psScript += "                $sslStream.AuthenticateAsClient($SmtpServer)\r\n";
+        psScript += "                $stream = $sslStream\r\n";
+        psScript += "            }\r\n";
+        psScript += "            \r\n";
+        psScript += "            $reader = New-Object System.IO.StreamReader($stream)\r\n";
+        psScript += "            $writer = New-Object System.IO.StreamWriter($stream)\r\n";
+        psScript += "            \r\n";
+        psScript += "            # SMTPサーバーからの初期レスポンス\r\n";
+        psScript += "            $response = $reader.ReadLine()\r\n";
+        psScript += "            Write-Output \"SMTPサーバー応答: $response\"\r\n";
+        psScript += "            \r\n";
+        psScript += "            # STARTTLS確認\r\n";
+        psScript += "            if ($ConnectionSecurity -eq \"STARTTLS\" -and -not $UseSSL) {\r\n";
+        psScript += "                Write-Output \"EHLO送信（STARTTLS確認用）...\"\r\n";
+        psScript += "                $writer.WriteLine(\"EHLO localhost\")\r\n";
+        psScript += "                $writer.Flush()\r\n";
+        psScript += "                \r\n";
+        psScript += "                do {\r\n";
+        psScript += "                    $response = $reader.ReadLine()\r\n";
+        psScript += "                    Write-Output \"EHLO応答: $response\"\r\n";
+        psScript += "                    if ($response -match \"STARTTLS\") {\r\n";
+        psScript += "                        Write-Output \"STARTTLS対応確認\"\r\n";
+        psScript += "                    }\r\n";
+        psScript += "                } while ($response.StartsWith(\"250-\"))\r\n";
+        psScript += "            }\r\n";
+        psScript += "            \r\n";
+        psScript += "            # QUITで終了\r\n";
+        psScript += "            $writer.WriteLine(\"QUIT\")\r\n";
+        psScript += "            $writer.Flush()\r\n";
+        psScript += "            \r\n";
+        psScript += "            $stream.Close()\r\n";
+        psScript += "            $tcpClient.Close()\r\n";
+        psScript += "            \r\n";
+        psScript += "            Write-Output \"SMTP接続テスト成功\"\r\n";
+        psScript += "            exit 0\r\n";
+        psScript += "        }\r\n";
+        psScript += "    } else {\r\n";
+        psScript += "        Write-Output \"TCP接続に失敗しました\"\r\n";
+        psScript += "        exit 1\r\n";
+        psScript += "    }\r\n";
+        psScript += "} catch {\r\n";
+        psScript += "    Write-Output \"接続テストエラー: $($_.Exception.Message)\"\r\n";
+        psScript += "    exit 1\r\n";
+        psScript += "}\r\n";
+
+        // 一時的なPowerShellスクリプトファイルを作成
+        var tempPsPath = fso.BuildPath(fso.GetSpecialFolder(2), "rcscheduler_smtp_test.ps1");
+        var psFile = fso.CreateTextFile(tempPsPath, true, false); // SJIS
+        psFile.Write(psScript);
+        psFile.Close();
+
+        var tempOutput = fso.BuildPath(fso.GetSpecialFolder(2), "rcscheduler_smtp_output.txt");
+        var tempError = fso.BuildPath(fso.GetSpecialFolder(2), "rcscheduler_smtp_error.txt");
+
+        // PowerShellスクリプトを実行
+        var cmdFull = 'powershell.exe -ExecutionPolicy Bypass -File "' + tempPsPath + '" > "' + tempOutput + '" 2> "' + tempError + '"';
+        var exitCode = shell.Run(cmdFull, 0, true);
+
+        // 出力を読み取り
+        var output = "";
+        var error = "";
+
+        if (fso.FileExists(tempOutput)) {
+            var fileObj = fso.GetFile(tempOutput);
+            if (fileObj.Size > 0) {
+                var outFile = fso.OpenTextFile(tempOutput, 1);
+                output = outFile.ReadAll();
+                outFile.Close();
+            }
+            fso.DeleteFile(tempOutput);
+        }
+
+        if (fso.FileExists(tempError)) {
+            var fileObj = fso.GetFile(tempError);
+            if (fileObj.Size > 0) {
+                var errFile = fso.OpenTextFile(tempError, 1);
+                error = errFile.ReadAll();
+                errFile.Close();
+            }
+            fso.DeleteFile(tempError);
+        }
+
+        // 一時PowerShellスクリプトを削除
+        if (fso.FileExists(tempPsPath)) {
+            fso.DeleteFile(tempPsPath);
+        }
+
+        // 結果をログに出力
+        if (output) {
+            var lines = output.split("\n");
+            for (var i = 0; i < lines.length; i++) {
+                if (lines[i].trim()) {
+                    logMessage("  " + lines[i].trim());
+                }
+            }
+        }
+
+        if (error) {
+            var lines = error.split("\n");
+            for (var i = 0; i < lines.length; i++) {
+                if (lines[i].trim()) {
+                    logMessage("  ERROR: " + lines[i].trim(), "error");
+                }
+            }
+        }
+
+        if (exitCode === 0) {
+            logMessage("SMTP接続テスト成功", "success");
+            alert("SMTPサーバーへの接続に成功しました。\n\n" +
+                  "サーバー: " + smtpServer + "\n" +
+                  "ポート: " + smtpPort + "\n" +
+                  "接続の保護: " + connectionSecurity);
+        } else {
+            logMessage("SMTP接続テスト失敗", "error");
+            alert("SMTPサーバーへの接続に失敗しました。\n\n詳細はログを確認してください。");
+        }
+
+    } catch(e) {
+        logMessage("SMTP接続テストエラー: " + e.message, "error");
+        alert("SMTP接続テストでエラーが発生しました。\n\n" + e.message);
+    }
+}
+
+// ======================================
+// メールテスト送信
+// ======================================
+
+function sendTestMail() {
+    var smtpServer = document.getElementById('smtpServer').value.trim();
+    var smtpPort = document.getElementById('smtpPort').value.trim();
+    var senderEmail = document.getElementById('senderEmail').value.trim();
+    var senderPassword = document.getElementById('senderPassword').value.trim();
+    var recipientEmail = document.getElementById('recipientEmail').value.trim();
+
+    // 入力検証
+    if (!smtpServer) {
+        alert("SMTPサーバーを入力してください。");
+        return;
+    }
+
+    if (!smtpPort) {
+        alert("ポート番号を入力してください。");
+        return;
+    }
+
+    if (!senderEmail) {
+        alert("送信者メールアドレスを入力してください。");
+        return;
+    }
+
+    if (!senderPassword) {
+        alert("送信者パスワードを入力してください。");
+        return;
+    }
+
+    if (!recipientEmail) {
+        alert("受信者メールアドレスを入力してください。");
+        return;
+    }
+
+    // ポート番号の検証
+    var portNum = parseInt(smtpPort, 10);
+    if (isNaN(portNum) || portNum < 1 || portNum > 65535) {
+        alert("有効なポート番号を入力してください（1-65535）");
+        return;
+    }
+
+    if (!confirm("テストメールを送信しますか？\n\n送信先: " + recipientEmail)) {
+        return;
+    }
+
+    try {
+        logMessage("テストメールを送信しています...");
+
+        // 設定値を取得
+        var connectionSecurity = document.getElementById('connectionSecurity').value;
+        var authMethod = document.getElementById('authMethod').value;
+        var useSSL = connectionSecurity === "SSL/TLS";
+        var useSTARTTLS = connectionSecurity === "STARTTLS";
+
+        // 現在の日時を取得
+        var now = new Date();
+        var dateTimeStr = now.getFullYear() + "年" +
+                          (now.getMonth() + 1) + "月" +
+                          now.getDate() + "日 " +
+                          now.getHours() + ":" +
+                          ("0" + now.getMinutes()).slice(-2) + ":" +
+                          ("0" + now.getSeconds()).slice(-2);
+
+        // ホスト名を取得
+        var hostName = shell.ExpandEnvironmentStrings("%COMPUTERNAME%");
+
+        // テストメール用PowerShellスクリプトを生成
+        var psScript = "# RCScheduler テストメール送信\r\n";
+        psScript += "$ErrorActionPreference = \"Stop\"\r\n\r\n";
+
+        psScript += "# 設定\r\n";
+        psScript += "$SmtpServer = \"" + escapePowerShellString(smtpServer) + "\"\r\n";
+        psScript += "$SmtpPort = " + smtpPort + "\r\n";
+        psScript += "$SenderEmail = \"" + escapePowerShellString(senderEmail) + "\"\r\n";
+        psScript += "$SenderPassword = \"" + escapePowerShellString(senderPassword) + "\"\r\n";
+        psScript += "$RecipientEmail = \"" + escapePowerShellString(recipientEmail) + "\"\r\n";
+        psScript += "$UseSSL = " + (useSSL ? "$true" : "$false") + "\r\n";
+        psScript += "$UseSTARTTLS = " + (useSTARTTLS ? "$true" : "$false") + "\r\n";
+        psScript += "$AuthMethod = \"" + authMethod + "\"\r\n\r\n";
+
+        psScript += "# メール内容\r\n";
+        psScript += "$Subject = \"[テスト] RCScheduler メール送信テスト\"\r\n";
+        psScript += "$Body = @\"\r\n";
+        psScript += "RCScheduler メール送信テスト\r\n";
+        psScript += "========================================\r\n\r\n";
+        psScript += "送信日時: " + dateTimeStr + "\r\n";
+        psScript += "実行ホスト: " + hostName + "\r\n\r\n";
+        psScript += "SMTP設定情報:\r\n";
+        psScript += "- SMTPサーバー: " + smtpServer + "\r\n";
+        psScript += "- ポート番号: " + smtpPort + "\r\n";
+        psScript += "- 接続の保護: " + connectionSecurity + "\r\n";
+        psScript += "- 認証方式: " + authMethod + "\r\n";
+        psScript += "- 送信元: " + senderEmail + "\r\n";
+        psScript += "- 宛先: " + recipientEmail + "\r\n\r\n";
+        psScript += "このメールは RCScheduler のメール送信機能のテストです。\r\n";
+        psScript += "正常に受信できていれば、メール送信機能が正しく動作しています。\r\n";
+        psScript += "\"@\r\n\r\n";
+
+        // Base64エンコード関数
+        psScript += "function ConvertTo-Base64($text) {\r\n";
+        psScript += "    $bytes = [System.Text.Encoding]::UTF8.GetBytes($text)\r\n";
+        psScript += "    return [System.Convert]::ToBase64String($bytes)\r\n";
+        psScript += "}\r\n\r\n";
+
+        // 認証コマンド送信関数（generateMailScript関数から引用）
+        psScript += "function Send-AuthCommand($writer, $reader, $authMethod, $username, $password) {\r\n";
+        psScript += "    switch ($authMethod) {\r\n";
+        psScript += "        \"CRAM-MD5\" {\r\n";
+        psScript += "            $writer.WriteLine(\"AUTH CRAM-MD5\")\r\n";
+        psScript += "            $writer.Flush()\r\n";
+        psScript += "            $response = $reader.ReadLine()\r\n";
+        psScript += "            \r\n";
+        psScript += "            if ($response.StartsWith(\"334\")) {\r\n";
+        psScript += "                $challenge = $response.Substring(4)\r\n";
+        psScript += "                $challengeBytes = [System.Convert]::FromBase64String($challenge)\r\n";
+        psScript += "                $challengeText = [System.Text.Encoding]::UTF8.GetString($challengeBytes)\r\n";
+        psScript += "                \r\n";
+        psScript += "                $hmac = New-Object System.Security.Cryptography.HMACMD5\r\n";
+        psScript += "                $hmac.Key = [System.Text.Encoding]::UTF8.GetBytes($password)\r\n";
+        psScript += "                $hash = $hmac.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($challengeText))\r\n";
+        psScript += "                $hashHex = [System.BitConverter]::ToString($hash) -replace \"-\", \"\"\r\n";
+        psScript += "                \r\n";
+        psScript += "                $cramResponse = \"$username \" + $hashHex.ToLower()\r\n";
+        psScript += "                $encodedResponse = ConvertTo-Base64 $cramResponse\r\n";
+        psScript += "                $writer.WriteLine($encodedResponse)\r\n";
+        psScript += "                $writer.Flush()\r\n";
+        psScript += "            }\r\n";
+        psScript += "        }\r\n";
+        psScript += "        \"LOGIN\" {\r\n";
+        psScript += "            $writer.WriteLine(\"AUTH LOGIN\")\r\n";
+        psScript += "            $writer.Flush()\r\n";
+        psScript += "            $response = $reader.ReadLine()\r\n";
+        psScript += "            if ($response.StartsWith(\"334\")) {\r\n";
+        psScript += "                $writer.WriteLine((ConvertTo-Base64 $username))\r\n";
+        psScript += "                $writer.Flush()\r\n";
+        psScript += "                $response = $reader.ReadLine()\r\n";
+        psScript += "                if ($response.StartsWith(\"334\")) {\r\n";
+        psScript += "                    $writer.WriteLine((ConvertTo-Base64 $password))\r\n";
+        psScript += "                    $writer.Flush()\r\n";
+        psScript += "                }\r\n";
+        psScript += "            }\r\n";
+        psScript += "        }\r\n";
+        psScript += "        \"PLAIN\" {\r\n";
+        psScript += "            $plainAuth = \"`0\" + $username + \"`0\" + $password\r\n";
+        psScript += "            $encodedAuth = ConvertTo-Base64 $plainAuth\r\n";
+        psScript += "            $writer.WriteLine(\"AUTH PLAIN $encodedAuth\")\r\n";
+        psScript += "            $writer.Flush()\r\n";
+        psScript += "        }\r\n";
+        psScript += "    }\r\n";
+        psScript += "}\r\n\r\n";
+
+        // メール送信処理
+        psScript += "try {\r\n";
+        psScript += "    Write-Output \"メール送信開始...\"\r\n";
+        psScript += "    \r\n";
+        psScript += "    # TCP接続\r\n";
+        psScript += "    $tcpClient = New-Object System.Net.Sockets.TcpClient\r\n";
+        psScript += "    $tcpClient.ReceiveTimeout = 30000\r\n";
+        psScript += "    $tcpClient.SendTimeout = 30000\r\n";
+        psScript += "    \r\n";
+        psScript += "    if ($UseSSL) {\r\n";
+        psScript += "        Write-Output \"SSL/TLS接続でサーバーに接続中...\"\r\n";
+        psScript += "        $tcpClient.Connect($SmtpServer, $SmtpPort)\r\n";
+        psScript += "        $sslStream = New-Object System.Net.Security.SslStream($tcpClient.GetStream(), $false)\r\n";
+        psScript += "        $sslStream.AuthenticateAsClient($SmtpServer)\r\n";
+        psScript += "        $stream = $sslStream\r\n";
+        psScript += "    } else {\r\n";
+        psScript += "        Write-Output \"平文接続でサーバーに接続中...\"\r\n";
+        psScript += "        $tcpClient.Connect($SmtpServer, $SmtpPort)\r\n";
+        psScript += "        $stream = $tcpClient.GetStream()\r\n";
+        psScript += "    }\r\n";
+        psScript += "    \r\n";
+        psScript += "    $reader = New-Object System.IO.StreamReader($stream)\r\n";
+        psScript += "    $writer = New-Object System.IO.StreamWriter($stream)\r\n";
+        psScript += "    $writer.AutoFlush = $true\r\n";
+        psScript += "    \r\n";
+        psScript += "    # サーバーの応答を待つ\r\n";
+        psScript += "    $response = $reader.ReadLine()\r\n";
+        psScript += "    Write-Output \"サーバー応答: $response\"\r\n";
+        psScript += "    \r\n";
+        psScript += "    # EHLO\r\n";
+        psScript += "    $writer.WriteLine(\"EHLO localhost\")\r\n";
+        psScript += "    $response = $reader.ReadLine()\r\n";
+        psScript += "    Write-Output \"EHLO応答: $response\"\r\n";
+        psScript += "    \r\n";
+        psScript += "    # 追加の応答を読み取る\r\n";
+        psScript += "    while ($response -match \"^250-\") {\r\n";
+        psScript += "        $response = $reader.ReadLine()\r\n";
+        psScript += "    }\r\n";
+        psScript += "    \r\n";
+        psScript += "    # STARTTLS処理\r\n";
+        psScript += "    if ($UseSTARTTLS) {\r\n";
+        psScript += "        Write-Output \"STARTTLS開始...\"\r\n";
+        psScript += "        $writer.WriteLine(\"STARTTLS\")\r\n";
+        psScript += "        $response = $reader.ReadLine()\r\n";
+        psScript += "        Write-Output \"STARTTLS応答: $response\"\r\n";
+        psScript += "        \r\n";
+        psScript += "        if ($response.StartsWith(\"220\")) {\r\n";
+        psScript += "            $sslStream = New-Object System.Net.Security.SslStream($stream, $false)\r\n";
+        psScript += "            $sslStream.AuthenticateAsClient($SmtpServer)\r\n";
+        psScript += "            $stream = $sslStream\r\n";
+        psScript += "            $reader = New-Object System.IO.StreamReader($stream)\r\n";
+        psScript += "            $writer = New-Object System.IO.StreamWriter($stream)\r\n";
+        psScript += "            $writer.AutoFlush = $true\r\n";
+        psScript += "            \r\n";
+        psScript += "            # STARTTLS後に再度EHLO\r\n";
+        psScript += "            $writer.WriteLine(\"EHLO localhost\")\r\n";
+        psScript += "            $response = $reader.ReadLine()\r\n";
+        psScript += "            while ($response -match \"^250-\") {\r\n";
+        psScript += "                $response = $reader.ReadLine()\r\n";
+        psScript += "            }\r\n";
+        psScript += "        }\r\n";
+        psScript += "    }\r\n";
+        psScript += "    \r\n";
+        psScript += "    # 認証\r\n";
+        psScript += "    Write-Output \"認証中 ($AuthMethod)...\"\r\n";
+        psScript += "    Send-AuthCommand $writer $reader $AuthMethod $SenderEmail $SenderPassword\r\n";
+        psScript += "    $response = $reader.ReadLine()\r\n";
+        psScript += "    Write-Output \"認証応答: $response\"\r\n";
+        psScript += "    \r\n";
+        psScript += "    if (-not $response.StartsWith(\"235\")) {\r\n";
+        psScript += "        throw \"認証失敗: $response\"\r\n";
+        psScript += "    }\r\n";
+        psScript += "    \r\n";
+        psScript += "    # MAIL FROM\r\n";
+        psScript += "    $writer.WriteLine(\"MAIL FROM:<$SenderEmail>\")\r\n";
+        psScript += "    $response = $reader.ReadLine()\r\n";
+        psScript += "    Write-Output \"MAIL FROM応答: $response\"\r\n";
+        psScript += "    \r\n";
+        psScript += "    # RCPT TO\r\n";
+        psScript += "    $writer.WriteLine(\"RCPT TO:<$RecipientEmail>\")\r\n";
+        psScript += "    $response = $reader.ReadLine()\r\n";
+        psScript += "    Write-Output \"RCPT TO応答: $response\"\r\n";
+        psScript += "    \r\n";
+        psScript += "    # DATA\r\n";
+        psScript += "    $writer.WriteLine(\"DATA\")\r\n";
+        psScript += "    $response = $reader.ReadLine()\r\n";
+        psScript += "    Write-Output \"DATA応答: $response\"\r\n";
+        psScript += "    \r\n";
+        psScript += "    # メールヘッダーと本文\r\n";
+        psScript += "    $writer.WriteLine(\"From: <$SenderEmail>\")\r\n";
+        psScript += "    $writer.WriteLine(\"To: <$RecipientEmail>\")\r\n";
+        psScript += "    $writer.WriteLine(\"Subject: =?UTF-8?B?\" + (ConvertTo-Base64 $Subject) + \"?=\")\r\n";
+        psScript += "    $writer.WriteLine(\"Content-Type: text/plain; charset=UTF-8\")\r\n";
+        psScript += "    $writer.WriteLine(\"Content-Transfer-Encoding: base64\")\r\n";
+        psScript += "    $writer.WriteLine(\"\")\r\n";
+        psScript += "    \r\n";
+        psScript += "    # 本文をBase64エンコード\r\n";
+        psScript += "    $bodyBytes = [System.Text.Encoding]::UTF8.GetBytes($Body)\r\n";
+        psScript += "    $bodyBase64 = [System.Convert]::ToBase64String($bodyBytes)\r\n";
+        psScript += "    $writer.WriteLine($bodyBase64)\r\n";
+        psScript += "    $writer.WriteLine(\".\")\r\n";
+        psScript += "    $response = $reader.ReadLine()\r\n";
+        psScript += "    Write-Output \"送信応答: $response\"\r\n";
+        psScript += "    \r\n";
+        psScript += "    if ($response.StartsWith(\"250\")) {\r\n";
+        psScript += "        Write-Output \"メール送信成功\"\r\n";
+        psScript += "    } else {\r\n";
+        psScript += "        throw \"メール送信失敗: $response\"\r\n";
+        psScript += "    }\r\n";
+        psScript += "    \r\n";
+        psScript += "    # QUIT\r\n";
+        psScript += "    $writer.WriteLine(\"QUIT\")\r\n";
+        psScript += "    $response = $reader.ReadLine()\r\n";
+        psScript += "    \r\n";
+        psScript += "    # クリーンアップ\r\n";
+        psScript += "    $writer.Close()\r\n";
+        psScript += "    $reader.Close()\r\n";
+        psScript += "    $stream.Close()\r\n";
+        psScript += "    $tcpClient.Close()\r\n";
+        psScript += "    \r\n";
+        psScript += "    exit 0\r\n";
+        psScript += "    \r\n";
+        psScript += "} catch {\r\n";
+        psScript += "    Write-Error \"エラー: $_\"\r\n";
+        psScript += "    exit 1\r\n";
+        psScript += "}\r\n";
+
+        // 一時PowerShellスクリプトを保存
+        var tempPsPath = fso.BuildPath(fso.GetSpecialFolder(2), "rcscheduler_test_mail.ps1");
+        var psFile = fso.CreateTextFile(tempPsPath, true);
+        psFile.Write(psScript);
+        psFile.Close();
+
+        logMessage("PowerShellスクリプトを生成しました: " + tempPsPath);
+
+        // PowerShellスクリプトを実行
+        var tempOutput = fso.BuildPath(fso.GetSpecialFolder(2), "rcscheduler_test_mail_output.txt");
+        var tempError = fso.BuildPath(fso.GetSpecialFolder(2), "rcscheduler_test_mail_error.txt");
+
+        var psCmd = 'powershell.exe -ExecutionPolicy Bypass -NoProfile -File "' + tempPsPath + '"';
+        var cmdFull = 'cmd.exe /c ' + psCmd + ' > "' + tempOutput + '" 2> "' + tempError + '"';
+        var exitCode = shell.Run(cmdFull, 0, true);
+
+        // 出力を読み取り
+        var output = "";
+        var error = "";
+
+        if (fso.FileExists(tempOutput)) {
+            var fileObj = fso.GetFile(tempOutput);
+            if (fileObj.Size > 0) {
+                var outFile = fso.OpenTextFile(tempOutput, 1);
+                output = outFile.ReadAll();
+                outFile.Close();
+            }
+            fso.DeleteFile(tempOutput);
+        }
+
+        if (fso.FileExists(tempError)) {
+            var fileObj = fso.GetFile(tempError);
+            if (fileObj.Size > 0) {
+                var errFile = fso.OpenTextFile(tempError, 1);
+                error = errFile.ReadAll();
+                errFile.Close();
+            }
+            fso.DeleteFile(tempError);
+        }
+
+        // 一時PowerShellスクリプトを削除
+        if (fso.FileExists(tempPsPath)) {
+            fso.DeleteFile(tempPsPath);
+        }
+
+        // 結果をログに出力
+        if (output) {
+            var lines = output.split("\n");
+            for (var i = 0; i < lines.length; i++) {
+                if (lines[i].trim()) {
+                    logMessage("  " + lines[i].trim());
+                }
+            }
+        }
+
+        if (error) {
+            var lines = error.split("\n");
+            for (var i = 0; i < lines.length; i++) {
+                if (lines[i].trim()) {
+                    logMessage("  ERROR: " + lines[i].trim(), "error");
+                }
+            }
+        }
+
+        if (exitCode === 0) {
+            logMessage("テストメール送信成功", "success");
+            alert("テストメールの送信に成功しました。\n\n" +
+                  "宛先: " + recipientEmail + "\n" +
+                  "件名: [テスト] RCScheduler メール送信テスト\n\n" +
+                  "受信トレイを確認してください。");
+        } else {
+            logMessage("テストメール送信失敗", "error");
+            alert("テストメールの送信に失敗しました。\n\n詳細はログを確認してください。");
+        }
+
+    } catch(e) {
+        logMessage("テストメール送信エラー: " + e.message, "error");
+        alert("テストメール送信でエラーが発生しました。\n\n" + e.message);
+    }
+}
+
+// ======================================
+// タスクスケジューラを開く
+// ======================================
+
+function openTaskScheduler() {
+    try {
+        logMessage("タスクスケジューラを起動しています...");
+
+        // taskschd.mscを実行してタスクスケジューラを開く
+        shell.Run("taskschd.msc", 1, false);
+
+        logMessage("タスクスケジューラを起動しました", "success");
+
+    } catch(e) {
+        logMessage("タスクスケジューラ起動エラー: " + e.message, "error");
+        alert("タスクスケジューラの起動に失敗しました。\n\n" + e.message);
+    }
+}
+
+</script>
+
+</body>
+</html>
