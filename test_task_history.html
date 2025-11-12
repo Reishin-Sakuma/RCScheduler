@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>タスク履歴設定機能テスト</title>
+    <style>
+        body {
+            font-family: 'メイリオ', Meiryo, sans-serif;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .test-result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .pass {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .fail {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .pending {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        h1 {
+            color: #333;
+        }
+        .summary {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #fff;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <h1>タスク履歴設定機能テスト</h1>
+    <div id="test-results"></div>
+    <div class="summary" id="summary"></div>
+
+    <script>
+        // テスト結果を記録する配列
+        const testResults = [];
+
+        // テストヘルパー関数
+        function assert(condition, message) {
+            if (condition) {
+                testResults.push({ status: 'pass', message: message });
+                addTestResult('pass', message);
+            } else {
+                testResults.push({ status: 'fail', message: message });
+                addTestResult('fail', message);
+            }
+        }
+
+        function addTestResult(status, message) {
+            const resultsDiv = document.getElementById('test-results');
+            const resultDiv = document.createElement('div');
+            resultDiv.className = `test-result ${status}`;
+            resultDiv.textContent = `[${status.toUpperCase()}] ${message}`;
+            resultsDiv.appendChild(resultDiv);
+        }
+
+        function showSummary() {
+            const total = testResults.length;
+            const passed = testResults.filter(r => r.status === 'pass').length;
+            const failed = testResults.filter(r => r.status === 'fail').length;
+
+            const summaryDiv = document.getElementById('summary');
+            summaryDiv.innerHTML = `
+                <h2>テストサマリー</h2>
+                <p>総テスト数: ${total}</p>
+                <p>成功: ${passed}</p>
+                <p>失敗: ${failed}</p>
+                <p>成功率: ${total > 0 ? ((passed / total) * 100).toFixed(2) : 0}%</p>
+            `;
+        }
+
+        // ===================================
+        // テストケース
+        // ===================================
+
+        // テスト1: enableTaskHistory関数が存在することを確認
+        function test_enableTaskHistory_exists() {
+            addTestResult('pending', 'enableTaskHistory関数が存在するか確認中...');
+            try {
+                const exists = typeof enableTaskHistory === 'function';
+                assert(exists, 'enableTaskHistory関数が定義されている');
+            } catch (e) {
+                assert(false, `enableTaskHistory関数が定義されていない: ${e.message}`);
+            }
+        }
+
+        // テスト2: disableTaskHistory関数が存在することを確認
+        function test_disableTaskHistory_exists() {
+            addTestResult('pending', 'disableTaskHistory関数が存在するか確認中...');
+            try {
+                const exists = typeof disableTaskHistory === 'function';
+                assert(exists, 'disableTaskHistory関数が定義されている');
+            } catch (e) {
+                assert(false, `disableTaskHistory関数が定義されていない: ${e.message}`);
+            }
+        }
+
+        // テスト3: getTaskHistoryStatus関数が存在することを確認
+        function test_getTaskHistoryStatus_exists() {
+            addTestResult('pending', 'getTaskHistoryStatus関数が存在するか確認中...');
+            try {
+                const exists = typeof getTaskHistoryStatus === 'function';
+                assert(exists, 'getTaskHistoryStatus関数が定義されている');
+            } catch (e) {
+                assert(false, `getTaskHistoryStatus関数が定義されていない: ${e.message}`);
+            }
+        }
+
+        // テスト4: enableTaskHistory関数が適切なコマンドを生成するか確認
+        function test_enableTaskHistory_command() {
+            addTestResult('pending', 'enableTaskHistory関数のコマンド生成を確認中...');
+            try {
+                // 関数が正しいコマンドを返すことを期待
+                // 実際の実装では、コマンド文字列を返すか、内部で実行する必要がある
+                // ここでは、関数を呼び出してエラーが出ないことを確認
+                const result = enableTaskHistory();
+                // enableTaskHistoryは成功時にメッセージオブジェクトを返すことを期待
+                assert(
+                    result && (result.success !== undefined || typeof result === 'string'),
+                    'enableTaskHistory関数が結果を返す'
+                );
+            } catch (e) {
+                // まだ実装されていないので、この時点では失敗が期待される
+                assert(false, `enableTaskHistory関数の実行に失敗: ${e.message}`);
+            }
+        }
+
+        // テスト5: disableTaskHistory関数が適切なコマンドを生成するか確認
+        function test_disableTaskHistory_command() {
+            addTestResult('pending', 'disableTaskHistory関数のコマンド生成を確認中...');
+            try {
+                const result = disableTaskHistory();
+                assert(
+                    result && (result.success !== undefined || typeof result === 'string'),
+                    'disableTaskHistory関数が結果を返す'
+                );
+            } catch (e) {
+                assert(false, `disableTaskHistory関数の実行に失敗: ${e.message}`);
+            }
+        }
+
+        // テスト6: getTaskHistoryStatus関数が状態を返すか確認
+        function test_getTaskHistoryStatus_returns_status() {
+            addTestResult('pending', 'getTaskHistoryStatus関数の戻り値を確認中...');
+            try {
+                const result = getTaskHistoryStatus();
+                // 結果がオブジェクトで、enabled プロパティを持つことを期待
+                assert(
+                    result && typeof result === 'object' && 'enabled' in result,
+                    'getTaskHistoryStatus関数が状態オブジェクトを返す'
+                );
+            } catch (e) {
+                assert(false, `getTaskHistoryStatus関数の実行に失敗: ${e.message}`);
+            }
+        }
+
+        // テスト7: enableTaskHistoryの期待される動作
+        function test_enableTaskHistory_expected_behavior() {
+            addTestResult('pending', 'enableTaskHistory関数の期待動作を確認中...');
+            try {
+                const result = enableTaskHistory();
+                // 成功時にsuccessプロパティがtrueであることを期待
+                assert(
+                    result && result.success === true,
+                    'enableTaskHistory関数が成功を示す結果を返す'
+                );
+            } catch (e) {
+                assert(false, `enableTaskHistory関数の期待動作が満たされない: ${e.message}`);
+            }
+        }
+
+        // テスト8: disableTaskHistoryの期待される動作
+        function test_disableTaskHistory_expected_behavior() {
+            addTestResult('pending', 'disableTaskHistory関数の期待動作を確認中...');
+            try {
+                const result = disableTaskHistory();
+                assert(
+                    result && result.success === true,
+                    'disableTaskHistory関数が成功を示す結果を返す'
+                );
+            } catch (e) {
+                assert(false, `disableTaskHistory関数の期待動作が満たされない: ${e.message}`);
+            }
+        }
+
+        // ===================================
+        // テスト実行
+        // ===================================
+
+        function runAllTests() {
+            console.log('テスト開始...');
+
+            test_enableTaskHistory_exists();
+            test_disableTaskHistory_exists();
+            test_getTaskHistoryStatus_exists();
+            test_enableTaskHistory_command();
+            test_disableTaskHistory_command();
+            test_getTaskHistoryStatus_returns_status();
+            test_enableTaskHistory_expected_behavior();
+            test_disableTaskHistory_expected_behavior();
+
+            showSummary();
+            console.log('テスト完了');
+        }
+
+        // ページ読み込み時にテストを実行
+        window.onload = function() {
+            // RCScheduler.htaから関数をインポートする必要がある
+            // 実際のテスト実行時は、RCScheduler.htaのスクリプト部分を読み込む
+            addTestResult('pending', 'RCScheduler.htaから関数を読み込む必要があります');
+            addTestResult('pending', 'このテストファイルは独立して実行できません');
+            addTestResult('pending', '実装後、RCScheduler.hta内でこれらのテストを実行してください');
+
+            runAllTests();
+        };
+    </script>
+</body>
+</html>
