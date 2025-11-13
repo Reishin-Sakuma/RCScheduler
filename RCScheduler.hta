@@ -850,6 +850,7 @@ var shellApp = new ActiveXObject("Shell.Application");
 
 // タスク管理用グローバル変数
 var tasks = [];  // 全タスクの配列
+var currentRegisteringTaskId = null;  // 現在登録中のタスクID（createScheduledTask用）
 
 // ======================================
 // 初期化
@@ -1237,15 +1238,30 @@ function generateTaskId() {
     return "task_" + timestamp + "_" + randomStr;
 }
 
-// タスクフォルダのパスを取得
+// タスクフォルダのパスを取得（RCScheduler_tasks）
 function getTasksFolder() {
     var appFolder = fso.GetParentFolderName(location.pathname.substring(1));
     return fso.BuildPath(appFolder, TASKS_FOLDER);
 }
 
-// タスクファイルのパスを取得
+// 個別タスクのフォルダパスを取得（RCScheduler_tasks/task_xxxxx）
+function getTaskFolder(taskId) {
+    return fso.BuildPath(getTasksFolder(), taskId);
+}
+
+// タスク設定ファイルのパスを取得（RCScheduler_tasks/task_xxxxx/config.json）
 function getTaskFilePath(taskId) {
-    return fso.BuildPath(getTasksFolder(), taskId + ".json");
+    return fso.BuildPath(getTaskFolder(taskId), "config.json");
+}
+
+// バッチスクリプトのパスを取得（RCScheduler_tasks/task_xxxxx/{タスク名}.bat）
+function getBatchScriptPath(taskId, taskName) {
+    return fso.BuildPath(getTaskFolder(taskId), taskName + ".bat");
+}
+
+// メールスクリプトのパスを取得（RCScheduler_tasks/task_xxxxx/{タスク名}_mail.ps1）
+function getMailScriptPath(taskId, taskName) {
+    return fso.BuildPath(getTaskFolder(taskId), taskName + "_mail.ps1");
 }
 
 // すべてのタスクを読み込む
@@ -1261,26 +1277,24 @@ function loadAllTasks() {
             return;
         }
 
-        // フォルダ内のすべてのJSONファイルを読み込む
+        // フォルダ内のすべてのタスクフォルダを読み込む
         var folder = fso.GetFolder(tasksFolder);
-        var files = new Enumerator(folder.Files);
+        var subFolders = new Enumerator(folder.SubFolders);
         var count = 0;
 
-        for (; !files.atEnd(); files.moveNext()) {
-            var file = files.item();
-            // IE互換：endsWithの代わりにsliceを使用
-            var fileName = file.Name.toLowerCase();
-            if (fileName.slice(-5) === '.json') {
-                try {
-                    var taskId = file.Name.substring(0, file.Name.length - 5);  // .jsonを除去
-                    var task = loadTask(taskId);
-                    if (task) {
-                        tasks.push(task);
-                        count++;
-                    }
-                } catch(e) {
-                    logMessage("タスク読み込みエラー (" + file.Name + "): " + e.message, "error");
+        for (; !subFolders.atEnd(); subFolders.moveNext()) {
+            var subFolder = subFolders.item();
+            var taskId = subFolder.Name;  // フォルダ名がタスクID
+
+            try {
+                // config.jsonを読み込む
+                var task = loadTask(taskId);
+                if (task) {
+                    tasks.push(task);
+                    count++;
                 }
+            } catch(e) {
+                logMessage("タスク読み込みエラー (" + taskId + "): " + e.message, "error");
             }
         }
 
@@ -1329,12 +1343,19 @@ function saveTask(task) {
             task.id = generateTaskId();
         }
 
-        // タスクフォルダが存在しない場合は作成
+        // RCScheduler_tasksフォルダが存在しない場合は作成
         var tasksFolder = getTasksFolder();
         if (!fso.FolderExists(tasksFolder)) {
             fso.CreateFolder(tasksFolder);
         }
 
+        // 個別タスクフォルダが存在しない場合は作成
+        var taskFolder = getTaskFolder(task.id);
+        if (!fso.FolderExists(taskFolder)) {
+            fso.CreateFolder(taskFolder);
+        }
+
+        // config.jsonとして保存
         var filePath = getTaskFilePath(task.id);
         var taskJson = JSON.stringify(task, null, 2);
 
@@ -1353,14 +1374,15 @@ function saveTask(task) {
 // タスクを削除
 function deleteTask(taskId) {
     try {
-        var filePath = getTaskFilePath(taskId);
+        var taskFolder = getTaskFolder(taskId);
 
-        if (!fso.FileExists(filePath)) {
+        if (!fso.FolderExists(taskFolder)) {
             logMessage("削除対象のタスクが見つかりません: " + taskId, "warning");
             return false;
         }
 
-        fso.DeleteFile(filePath);
+        // タスクフォルダごと削除（config.json、.bat、.ps1など全て）
+        fso.DeleteFolder(taskFolder);
 
         // tasks配列からも削除
         for (var i = 0; i < tasks.length; i++) {
@@ -1569,13 +1591,17 @@ function registerTaskById(taskId) {
     try {
         logMessage('タスク "' + task.name + '" をWindowsタスクスケジューラに登録します...');
 
-        // 既存のcreateScheduledTask()関数を呼び出し
+        // タスクIDを設定してcreateScheduledTask()を呼び出し
+        currentRegisteringTaskId = taskId;
         createScheduledTask();
 
     } catch(e) {
         logMessage('タスク登録エラー: ' + e.message, 'error');
         alert('タスク登録に失敗しました。\n\n' + e.message);
     } finally {
+        // グローバル変数をクリア
+        currentRegisteringTaskId = null;
+
         // 元のフォーム状態を復元（編集中の場合）
         if (currentEditingTaskId) {
             loadTaskToForm(originalTask);
@@ -2624,8 +2650,16 @@ function createScheduledTask() {
 
         // バッチスクリプトを生成
         var batchContent = generateBatchScript();
-        var batchPath = fso.BuildPath(fso.GetParentFolderName(location.pathname.substring(1)),
+
+        // タスクフォルダ内に保存（タスクIDが指定されている場合）
+        var batchPath;
+        if (currentRegisteringTaskId) {
+            batchPath = getBatchScriptPath(currentRegisteringTaskId, taskName);
+        } else {
+            // 後方互換性：タスクIDがない場合は従来通りアプリフォルダに保存
+            batchPath = fso.BuildPath(fso.GetParentFolderName(location.pathname.substring(1)),
                                       taskName + ".bat");
+        }
 
         var file = fso.CreateTextFile(batchPath, true, false);
         file.Write(batchContent);
@@ -2636,8 +2670,16 @@ function createScheduledTask() {
         // メール送信スクリプトを生成（メール有効時）
         if (document.getElementById('emailEnabled').checked) {
             var mailScript = generateMailScript();
-            var mailScriptPath = fso.BuildPath(fso.GetParentFolderName(location.pathname.substring(1)),
+
+            // タスクフォルダ内に保存（タスクIDが指定されている場合）
+            var mailScriptPath;
+            if (currentRegisteringTaskId) {
+                mailScriptPath = getMailScriptPath(currentRegisteringTaskId, taskName);
+            } else {
+                // 後方互換性：タスクIDがない場合は従来通りアプリフォルダに保存
+                mailScriptPath = fso.BuildPath(fso.GetParentFolderName(location.pathname.substring(1)),
                                                taskName + "_mail.ps1");
+            }
 
             var mailFile = fso.CreateTextFile(mailScriptPath, true, true); // UTF-8 BOM
             mailFile.Write(mailScript);
