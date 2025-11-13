@@ -1227,7 +1227,9 @@ function loadConfig() {
 function generateTaskId() {
     var timestamp = new Date().getTime();
     var random = Math.floor(Math.random() * 1000);
-    return "task_" + timestamp + "_" + String(random).padStart(3, '0');
+    // IE互換：padStartの代わりに手動で0埋め
+    var randomStr = random < 10 ? '00' + random : (random < 100 ? '0' + random : '' + random);
+    return "task_" + timestamp + "_" + randomStr;
 }
 
 // タスクフォルダのパスを取得
