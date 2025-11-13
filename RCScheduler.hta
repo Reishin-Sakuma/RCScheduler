@@ -1463,6 +1463,7 @@ function renderTaskCard(task) {
     html += '  <div class="task-actions">';
     html += '    <button class="btn btn-primary btn-small" onclick="registerTaskById(\'' + task.id + '\')">📝 登録</button>';
     html += '    <button class="btn btn-secondary btn-small" onclick="editTaskById(\'' + task.id + '\')">✏️ 編集</button>';
+    html += '    <button class="btn btn-secondary btn-small" onclick="copyTaskById(\'' + task.id + '\')">📋 コピー</button>';
     html += '    <button class="btn btn-danger btn-small" onclick="deleteTaskById(\'' + task.id + '\')">🗑️ 削除</button>';
     html += '  </div>';
     html += '</div>';
@@ -1588,6 +1589,83 @@ function deleteTaskById(taskId) {
         if (deleteTask(taskId)) {
             refreshTaskList();
         }
+    }
+}
+
+// タスクをコピーして新規作成
+function copyTaskById(taskId) {
+    // タスクを検索
+    var task = null;
+    for (var i = 0; i < tasks.length; i++) {
+        if (tasks[i].id === taskId) {
+            task = tasks[i];
+            break;
+        }
+    }
+
+    if (!task) {
+        alert('タスクが見つかりません: ' + taskId);
+        return;
+    }
+
+    try {
+        // タスクのコピーを作成（IDは除外）
+        var newTask = {
+            name: task.name + ' (コピー)',
+            enabled: task.enabled,
+            source: task.source,
+            dest: task.dest,
+            copy_mode: task.copy_mode,
+            robocopy_options: task.robocopy_options ? {
+                no_progress: task.robocopy_options.no_progress,
+                no_dir_list: task.robocopy_options.no_dir_list,
+                sec: task.robocopy_options.sec,
+                list_only: task.robocopy_options.list_only,
+                enable_log: task.robocopy_options.enable_log
+            } : null,
+            retry_count: task.retry_count,
+            wait_time: task.wait_time,
+            log_file: task.log_file,
+            custom_options: task.custom_options,
+            schedule: task.schedule ? {
+                frequency: task.schedule.frequency,
+                weekday: task.schedule.weekday,
+                hour: task.schedule.hour,
+                minute: task.schedule.minute
+            } : null,
+            email_enabled: task.email_enabled,
+            smtp_server: task.smtp_server,
+            smtp_port: task.smtp_port,
+            connection_security: task.connection_security,
+            auth_method: task.auth_method,
+            sender_email: task.sender_email,
+            sender_password: task.sender_password,
+            recipient_email: task.recipient_email,
+            history_enabled: task.history_enabled,
+            source_username: task.source_username,
+            source_password: task.source_password,
+            source_domain: task.source_domain,
+            dest_username: task.dest_username,
+            dest_password: task.dest_password,
+            dest_domain: task.dest_domain
+        };
+
+        // 新しいタスクとして保存
+        var newTaskId = saveTask(newTask);
+
+        if (newTaskId) {
+            // tasks配列に追加
+            newTask.id = newTaskId;
+            tasks.push(newTask);
+
+            // リストを更新
+            refreshTaskList();
+
+            logMessage('タスク "' + task.name + '" をコピーしました: ' + newTask.name, 'success');
+        }
+    } catch(e) {
+        logMessage('タスクコピーエラー: ' + e.message, 'error');
+        alert('タスクのコピーに失敗しました。\n\n' + e.message);
     }
 }
 
