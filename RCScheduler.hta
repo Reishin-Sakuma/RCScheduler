@@ -18,7 +18,7 @@
 />
 <meta charset="UTF-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
-<title>RCScheduler - ver.2.0.0</title>
+<title>RCScheduler - ver.2.1.0</title>
 
 <style>
     /* ====================================== */
@@ -704,11 +704,15 @@
 // グローバル変数
 // ======================================
 
-var VERSION = "2.0.0";
-var CONFIG_FILE = "robocopy_config.json";
+var VERSION = "2.1.0";
+var CONFIG_FILE = "robocopy_config.json";  // 旧設定ファイル（互換性のため残す）
+var TASKS_FOLDER = "RCScheduler_tasks";    // タスク設定フォルダ
 var fso = new ActiveXObject("Scripting.FileSystemObject");
 var shell = new ActiveXObject("WScript.Shell");
 var shellApp = new ActiveXObject("Shell.Application");
+
+// タスク管理用グローバル変数
+var tasks = [];  // 全タスクの配列
 
 // ======================================
 // 初期化
@@ -734,8 +738,11 @@ window.onload = function() {
         logMessage("管理者権限で起動しています - 全機能が利用可能です", "success");
     }
 
-    // 設定を読み込み
-    loadConfig();
+    // タスクを読み込み（v2.1.0以降）
+    loadAllTasks();
+
+    // 旧設定ファイルの互換性処理（v2.0.0以前）
+    // loadConfig();  // 将来的に移行処理を追加予定
 
     // タスクステータスを更新
     updateTaskStatus();
@@ -1078,6 +1085,162 @@ function loadConfig() {
     } catch(e) {
         logMessage("設定読み込みエラー: " + e.message, "error");
     }
+}
+
+// ======================================
+// タスク管理関数
+// ======================================
+
+// タスクIDを生成（task_ + タイムスタンプ + ランダム3桁）
+function generateTaskId() {
+    var timestamp = new Date().getTime();
+    var random = Math.floor(Math.random() * 1000);
+    return "task_" + timestamp + "_" + String(random).padStart(3, '0');
+}
+
+// タスクフォルダのパスを取得
+function getTasksFolder() {
+    var appFolder = fso.GetParentFolderName(location.pathname.substring(1));
+    return fso.BuildPath(appFolder, TASKS_FOLDER);
+}
+
+// タスクファイルのパスを取得
+function getTaskFilePath(taskId) {
+    return fso.BuildPath(getTasksFolder(), taskId + ".json");
+}
+
+// すべてのタスクを読み込む
+function loadAllTasks() {
+    try {
+        tasks = [];  // タスク配列をクリア
+        var tasksFolder = getTasksFolder();
+
+        // タスクフォルダが存在しない場合は作成
+        if (!fso.FolderExists(tasksFolder)) {
+            fso.CreateFolder(tasksFolder);
+            logMessage("タスクフォルダを作成しました: " + tasksFolder);
+            return;
+        }
+
+        // フォルダ内のすべてのJSONファイルを読み込む
+        var folder = fso.GetFolder(tasksFolder);
+        var files = new Enumerator(folder.Files);
+        var count = 0;
+
+        for (; !files.atEnd(); files.moveNext()) {
+            var file = files.item();
+            if (file.Name.toLowerCase().endsWith('.json')) {
+                try {
+                    var taskId = file.Name.substring(0, file.Name.length - 5);  // .jsonを除去
+                    var task = loadTask(taskId);
+                    if (task) {
+                        tasks.push(task);
+                        count++;
+                    }
+                } catch(e) {
+                    logMessage("タスク読み込みエラー (" + file.Name + "): " + e.message, "error");
+                }
+            }
+        }
+
+        logMessage("タスクを読み込みました: " + count + "件", "success");
+    } catch(e) {
+        logMessage("タスク一覧読み込みエラー: " + e.message, "error");
+    }
+}
+
+// 特定のタスクを読み込む
+function loadTask(taskId) {
+    try {
+        var filePath = getTaskFilePath(taskId);
+
+        if (!fso.FileExists(filePath)) {
+            logMessage("タスクファイルが見つかりません: " + taskId, "warning");
+            return null;
+        }
+
+        var file = fso.OpenTextFile(filePath, 1, false);
+        var taskJson = file.ReadAll();
+        file.Close();
+
+        var task = JSON.parse(taskJson);
+
+        // タスクIDが設定されていない場合は追加
+        if (!task.id) {
+            task.id = taskId;
+        }
+
+        return task;
+    } catch(e) {
+        logMessage("タスク読み込みエラー (" + taskId + "): " + e.message, "error");
+        return null;
+    }
+}
+
+// タスクを保存
+function saveTask(task) {
+    try {
+        // タスクIDが未設定の場合は生成
+        if (!task.id) {
+            task.id = generateTaskId();
+        }
+
+        // タスクフォルダが存在しない場合は作成
+        var tasksFolder = getTasksFolder();
+        if (!fso.FolderExists(tasksFolder)) {
+            fso.CreateFolder(tasksFolder);
+        }
+
+        var filePath = getTaskFilePath(task.id);
+        var taskJson = JSON.stringify(task, null, 2);
+
+        var file = fso.CreateTextFile(filePath, true, false);
+        file.Write(taskJson);
+        file.Close();
+
+        logMessage("タスクを保存しました: " + task.name + " (" + task.id + ")", "success");
+        return task.id;
+    } catch(e) {
+        logMessage("タスク保存エラー: " + e.message, "error");
+        return null;
+    }
+}
+
+// タスクを削除
+function deleteTask(taskId) {
+    try {
+        var filePath = getTaskFilePath(taskId);
+
+        if (!fso.FileExists(filePath)) {
+            logMessage("削除対象のタスクが見つかりません: " + taskId, "warning");
+            return false;
+        }
+
+        fso.DeleteFile(filePath);
+
+        // tasks配列からも削除
+        for (var i = 0; i < tasks.length; i++) {
+            if (tasks[i].id === taskId) {
+                tasks.splice(i, 1);
+                break;
+            }
+        }
+
+        logMessage("タスクを削除しました: " + taskId, "success");
+        return true;
+    } catch(e) {
+        logMessage("タスク削除エラー: " + e.message, "error");
+        return false;
+    }
+}
+
+// タスクリストを取得（IDの配列）
+function getTaskList() {
+    var taskIds = [];
+    for (var i = 0; i < tasks.length; i++) {
+        taskIds.push(tasks[i].id);
+    }
+    return taskIds;
 }
 
 function getSelectedWeekdays() {
