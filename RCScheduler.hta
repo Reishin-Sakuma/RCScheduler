@@ -2349,9 +2349,17 @@ function generateBatchScript(taskId, taskName) {
 
     // メール送信（フレキシブル対応）
     if (document.getElementById('emailEnabled').checked) {
-        var taskName = document.getElementById('taskName').value;
-        var psScriptName = taskName + "_batch_mail.ps1";
-        var psScriptPath = fso.BuildPath(fso.GetParentFolderName(location.pathname.substring(1)), psScriptName);
+        var currentTaskName = document.getElementById('taskName').value;
+        var psScriptPath;
+
+        if (taskId && taskName) {
+            // タスクフォルダ内のメールスクリプトを参照
+            psScriptPath = getMailScriptPath(taskId, taskName);
+        } else {
+            // 後方互換性：タスクIDがない場合は従来通りアプリフォルダを参照
+            var psScriptName = currentTaskName + "_batch_mail.ps1";
+            psScriptPath = fso.BuildPath(fso.GetParentFolderName(location.pathname.substring(1)), psScriptName);
+        }
 
         batch += ":: メール送信（フレキシブル認証）\r\n";
         batch += "echo [%date% %time%] メール送信準備中... >> %LOG_FILE%\r\n";
@@ -2670,8 +2678,10 @@ function createScheduledTask() {
     try {
         logMessage("タスクスケジューラへの登録を開始します...");
 
-        // 設定を保存
-        saveConfig();
+        // 設定を保存（タスクリスト機能を使用していない場合のみ）
+        if (!currentRegisteringTaskId) {
+            saveConfig();
+        }
 
         // バッチスクリプトを生成（タスクIDとタスク名を渡す）
         var batchContent = generateBatchScript(currentRegisteringTaskId, taskName);
