@@ -1249,9 +1249,26 @@ function getTaskFolder(taskId) {
     return fso.BuildPath(getTasksFolder(), taskId);
 }
 
-// タスク設定ファイルのパスを取得（RCScheduler_tasks/task_xxxxx/config.json）
-function getTaskFilePath(taskId) {
-    return fso.BuildPath(getTaskFolder(taskId), "config.json");
+// タスク設定ファイルのパスを取得（RCScheduler_tasks/task_xxxxx/{タスク名}_config.json）
+function getTaskFilePath(taskId, taskName) {
+    if (taskName) {
+        return fso.BuildPath(getTaskFolder(taskId), taskName + "_config.json");
+    } else {
+        // タスク名が不明な場合はフォルダ内の*_config.jsonを探す
+        var taskFolder = getTaskFolder(taskId);
+        if (fso.FolderExists(taskFolder)) {
+            var folder = fso.GetFolder(taskFolder);
+            var files = new Enumerator(folder.Files);
+            for (; !files.atEnd(); files.moveNext()) {
+                var file = files.item();
+                var fileName = file.Name.toLowerCase();
+                if (fileName.slice(-12) === '_config.json') {
+                    return file.Path;
+                }
+            }
+        }
+        return null;
+    }
 }
 
 // バッチスクリプトのパスを取得（RCScheduler_tasks/task_xxxxx/{タスク名}.bat）
@@ -1355,8 +1372,8 @@ function saveTask(task) {
             fso.CreateFolder(taskFolder);
         }
 
-        // config.jsonとして保存
-        var filePath = getTaskFilePath(task.id);
+        // {タスク名}_config.jsonとして保存
+        var filePath = getTaskFilePath(task.id, task.name);
         var taskJson = JSON.stringify(task, null, 2);
 
         var file = fso.CreateTextFile(filePath, true, false);
@@ -1528,7 +1545,8 @@ function testTaskById(taskId) {
     loadTaskToForm(task);  // テスト対象タスクをフォームに読み込み
 
     try {
-        var batchScript = generateBatchScript();
+        // テスト実行の場合はタスクIDとタスク名を渡す（テスト用の一時ファイルを使用）
+        var batchScript = generateBatchScript(null, null);
 
         // バッチファイルを一時フォルダに保存
         var tempBatchPath = fso.BuildPath(fso.GetSpecialFolder(2), "rcscheduler_test_" + task.id + ".bat");
@@ -2129,7 +2147,7 @@ function escapePowerShellString(str) {
 // バッチスクリプト生成
 // ======================================
 
-function generateBatchScript() {
+function generateBatchScript(taskId, taskName) {
     var now = new Date();
     var dateStr = now.getFullYear() + "-" +
                   padZero(now.getMonth() + 1) + "-" +
@@ -2143,13 +2161,20 @@ function generateBatchScript() {
     var options = buildRobocopyOptions(false);
 
     // ベースログファイルのパス（拡張子なし）
-    var baseLogFile = document.getElementById('logFile').value || "robocopy_schedule_log";
-    if (baseLogFile.toLowerCase().indexOf('.txt') === baseLogFile.length - 4) {
-        baseLogFile = baseLogFile.substring(0, baseLogFile.length - 4);
-    }
-    // 絶対パスに変換
-    if (!fso.FileExists(baseLogFile) && baseLogFile.indexOf('\\') === -1 && baseLogFile.indexOf(':') === -1) {
-        baseLogFile = fso.BuildPath(fso.GetParentFolderName(location.pathname.substring(1)), baseLogFile);
+    var baseLogFile;
+    if (taskId && taskName) {
+        // タスクフォルダ内にログを保存（タスク名を含める）
+        baseLogFile = fso.BuildPath(getTaskFolder(taskId), taskName + "_log");
+    } else {
+        // 後方互換性：タスクIDがない場合は従来通り
+        baseLogFile = document.getElementById('logFile').value || "robocopy_schedule_log";
+        if (baseLogFile.toLowerCase().indexOf('.txt') === baseLogFile.length - 4) {
+            baseLogFile = baseLogFile.substring(0, baseLogFile.length - 4);
+        }
+        // 絶対パスに変換
+        if (!fso.FileExists(baseLogFile) && baseLogFile.indexOf('\\') === -1 && baseLogFile.indexOf(':') === -1) {
+            baseLogFile = fso.BuildPath(fso.GetParentFolderName(location.pathname.substring(1)), baseLogFile);
+        }
     }
 
     var batch = "@echo off\r\n";
@@ -2648,8 +2673,8 @@ function createScheduledTask() {
         // 設定を保存
         saveConfig();
 
-        // バッチスクリプトを生成
-        var batchContent = generateBatchScript();
+        // バッチスクリプトを生成（タスクIDとタスク名を渡す）
+        var batchContent = generateBatchScript(currentRegisteringTaskId, taskName);
 
         // タスクフォルダ内に保存（タスクIDが指定されている場合）
         var batchPath;
