@@ -295,6 +295,114 @@
         margin: 20px 0;
     }
 
+    /* タスクカード */
+    .task-card {
+        background-color: var(--bg-secondary);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 20px;
+        margin-bottom: 15px;
+        transition: all 0.2s;
+    }
+
+    .task-card:hover {
+        border-color: var(--primary);
+        box-shadow: 0 0 10px rgba(59, 130, 246, 0.2);
+    }
+
+    .task-card.disabled {
+        opacity: 0.5;
+    }
+
+    .task-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+    }
+
+    .task-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .task-title input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+    }
+
+    .task-title h3 {
+        font-size: 18px;
+        color: var(--white);
+        margin: 0;
+    }
+
+    .task-status {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 3px;
+        font-size: 11px;
+        font-weight: bold;
+    }
+
+    .task-status.active {
+        background-color: var(--success);
+        color: var(--white);
+    }
+
+    .task-status.inactive {
+        background-color: var(--secondary);
+        color: var(--white);
+    }
+
+    .task-info {
+        margin-bottom: 15px;
+    }
+
+    .task-path {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 8px;
+    }
+
+    .task-path-item {
+        font-size: 14px;
+        color: var(--text);
+        background-color: var(--bg-tertiary);
+        padding: 6px 12px;
+        border-radius: 4px;
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .task-arrow {
+        color: var(--primary);
+        font-size: 16px;
+        font-weight: bold;
+    }
+
+    .task-schedule {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: var(--text-muted);
+    }
+
+    .task-schedule-icon {
+        color: var(--primary);
+    }
+
+    .task-actions {
+        display: flex;
+        gap: 8px;
+    }
+
     /* 小さいテキスト */
     .text-small {
         font-size: 12px;
@@ -362,13 +470,39 @@
     <!-- ヘッダー -->
     <div class="header">
         <h1>RCScheduler</h1>
-        <span class="version">v2.0.0</span>
+        <span class="version">v2.1.0</span>
         <p class="description">
-            Robocopyを使った自動バックアップスケジューラー。フォルダの同期、タスクスケジューラへの登録、メール通知機能を提供します。
+            Robocopyを使った自動バックアップスケジューラー。複数タスクの管理、フォルダの同期、タスクスケジューラへの登録、メール通知機能を提供します。
         </p>
     </div>
 
-    <!-- Robocopy設定セクション -->
+    <!-- タスクリストセクション -->
+    <div class="section">
+        <div class="section-title" style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                📋 タスクリスト
+                <span id="taskCount" style="color: var(--text-muted); font-size: 14px; margin-left: 10px;">(0件)</span>
+            </div>
+            <button class="btn btn-primary" onclick="showAddTaskDialog()" style="padding: 8px 16px;">
+                ➕ 新規タスク追加
+            </button>
+        </div>
+
+        <!-- タスクリスト表示エリア -->
+        <div id="taskListArea">
+            <!-- タスクカードがここに動的に追加されます -->
+        </div>
+
+        <!-- 空の状態 -->
+        <div id="emptyTaskState" style="display: none; text-align: center; padding: 60px 20px; border: 2px dashed var(--border); border-radius: 6px; margin-top: 15px;">
+            <div style="font-size: 48px; color: var(--text-muted); margin-bottom: 15px;">📋</div>
+            <h3 style="color: var(--white); margin-bottom: 10px;">タスクがありません</h3>
+            <p style="color: var(--text-muted); margin-bottom: 20px;">「新規タスク追加」ボタンをクリックして、最初のバックアップタスクを作成しましょう。</p>
+        </div>
+    </div>
+
+    <!-- Robocopy設定セクション（タスク追加・編集時に使用） -->
+    <div id="taskEditorSection" style="display: none;">
     <div class="section">
         <div class="section-title">📁 Robocopy設定</div>
 
@@ -1144,6 +1278,9 @@ function loadAllTasks() {
         }
 
         logMessage("タスクを読み込みました: " + count + "件", "success");
+
+        // タスクリストUIを更新
+        refreshTaskList();
     } catch(e) {
         logMessage("タスク一覧読み込みエラー: " + e.message, "error");
     }
@@ -1241,6 +1378,126 @@ function getTaskList() {
         taskIds.push(tasks[i].id);
     }
     return taskIds;
+}
+
+// タスクリストを再描画
+function refreshTaskList() {
+    var taskListArea = document.getElementById('taskListArea');
+    var emptyState = document.getElementById('emptyTaskState');
+    var taskCount = document.getElementById('taskCount');
+
+    // タスク数を更新
+    taskCount.textContent = '(' + tasks.length + '件)';
+
+    // タスクがない場合は空の状態を表示
+    if (tasks.length === 0) {
+        taskListArea.innerHTML = '';
+        emptyState.style.display = 'block';
+        return;
+    }
+
+    // 空の状態を非表示
+    emptyState.style.display = 'none';
+
+    // タスクカードを生成
+    var html = '';
+    for (var i = 0; i < tasks.length; i++) {
+        html += renderTaskCard(tasks[i]);
+    }
+    taskListArea.innerHTML = html;
+}
+
+// タスクカードのHTMLを生成
+function renderTaskCard(task) {
+    var enabled = task.enabled !== false;  // デフォルトは有効
+    var disabledClass = enabled ? '' : ' disabled';
+    var statusClass = enabled ? 'active' : 'inactive';
+    var statusText = enabled ? '有効' : '無効';
+    var checked = enabled ? ' checked' : '';
+
+    // スケジュール情報を生成
+    var scheduleText = '';
+    if (task.schedule) {
+        if (task.schedule.frequency === 'DAILY') {
+            scheduleText = '毎日';
+        } else if (task.schedule.frequency === 'WEEKLY') {
+            scheduleText = '毎週 ' + (task.schedule.weekday || '');
+        }
+        scheduleText += ' ' + (task.schedule.hour || '00') + ':' + (task.schedule.minute || '00') + ' 実行';
+    }
+
+    // コピーモード情報
+    var modeText = task.copy_mode || 'MIR';
+    scheduleText += ' | /' + modeText + ' モード';
+
+    // ログ有効/無効
+    var logEnabled = task.robocopy_options && task.robocopy_options.enable_log !== false;
+    scheduleText += ' | ログ' + (logEnabled ? '有効' : '無効');
+
+    var html = '<div class="task-card' + disabledClass + '" data-task-id="' + task.id + '">';
+    html += '  <div class="task-header">';
+    html += '    <div class="task-title">';
+    html += '      <input type="checkbox"' + checked + ' onchange="toggleTaskEnabled(\'' + task.id + '\')">';
+    html += '      <h3>' + (task.name || 'タスク名なし') + '</h3>';
+    html += '      <span class="task-status ' + statusClass + '">' + statusText + '</span>';
+    html += '    </div>';
+    html += '  </div>';
+    html += '  <div class="task-info">';
+    html += '    <div class="task-path">';
+    html += '      <div class="task-path-item">' + (task.source || '') + '</div>';
+    html += '      <span class="task-arrow">→</span>';
+    html += '      <div class="task-path-item">' + (task.dest || '') + '</div>';
+    html += '    </div>';
+    html += '    <div class="task-schedule">';
+    html += '      <span class="task-schedule-icon">⏰</span>';
+    html += '      <span>' + scheduleText + '</span>';
+    html += '    </div>';
+    html += '  </div>';
+    html += '  <div class="task-actions">';
+    html += '    <button class="btn btn-secondary btn-small" onclick="editTaskById(\'' + task.id + '\')">✏️ 編集</button>';
+    html += '    <button class="btn btn-success btn-small" onclick="testTaskById(\'' + task.id + '\')">▶️ テスト実行</button>';
+    html += '    <button class="btn btn-danger btn-small" onclick="deleteTaskById(\'' + task.id + '\')">🗑️ 削除</button>';
+    html += '  </div>';
+    html += '</div>';
+
+    return html;
+}
+
+// タスクの有効/無効を切り替え
+function toggleTaskEnabled(taskId) {
+    for (var i = 0; i < tasks.length; i++) {
+        if (tasks[i].id === taskId) {
+            tasks[i].enabled = !tasks[i].enabled;
+            saveTask(tasks[i]);
+            refreshTaskList();
+            logMessage('タスク "' + tasks[i].name + '" を' + (tasks[i].enabled ? '有効' : '無効') + 'にしました');
+            break;
+        }
+    }
+}
+
+// タスク追加ダイアログを表示（プレースホルダー）
+function showAddTaskDialog() {
+    alert('タスク追加機能は次のステップで実装します。');
+}
+
+// タスク編集（プレースホルダー）
+function editTaskById(taskId) {
+    alert('タスク編集機能は後のステップで実装します。タスクID: ' + taskId);
+}
+
+// タスクテスト実行（プレースホルダー）
+function testTaskById(taskId) {
+    alert('タスクテスト実行機能は後のステップで実装します。タスクID: ' + taskId);
+}
+
+// タスク削除（プレースホルダー）
+function deleteTaskById(taskId) {
+    if (confirm('このタスクを削除してもよろしいですか？')) {
+        if (deleteTask(taskId)) {
+            refreshTaskList();
+        }
+    }
 }
 
 function getSelectedWeekdays() {
