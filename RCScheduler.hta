@@ -58,8 +58,32 @@
     }
 
     .container {
-        max-width: 900px;
-        margin: 0 auto;
+        display: flex;
+        gap: 20px;
+        padding: 20px;
+        height: calc(100vh - 40px);
+    }
+
+    .main-content {
+        flex: 1;
+        overflow-y: auto;
+        padding-right: 10px;
+    }
+
+    .log-sidebar {
+        width: 400px;
+        display: flex;
+        flex-direction: column;
+        background-color: #2d2d2d;
+        border: 1px solid #404040;
+        border-radius: 4px;
+        padding: 20px;
+    }
+
+    .log-sidebar .section-title {
+        margin-bottom: 15px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #404040;
     }
 
     /* ヘッダー */
@@ -259,7 +283,7 @@
     /* ログエリア */
     .log-area {
         width: 100%;
-        height: 200px;
+        flex: 1;
         padding: 10px;
         font-family: 'Consolas', 'Courier New', monospace;
         font-size: 12px;
@@ -467,14 +491,16 @@
 <body>
 
 <div class="container">
-    <!-- ヘッダー -->
-    <div class="header">
-        <h1>RCScheduler</h1>
-        <span class="version">v2.1.0</span>
-        <p class="description">
-            Robocopyを使った自動バックアップスケジューラー。複数タスクの管理、フォルダの同期、タスクスケジューラへの登録、メール通知機能を提供します。
-        </p>
-    </div>
+    <!-- メインコンテンツ -->
+    <div class="main-content">
+        <!-- ヘッダー -->
+        <div class="header">
+            <h1>RCScheduler</h1>
+            <span class="version">v2.1.0</span>
+            <p class="description">
+                Robocopyを使った自動バックアップスケジューラー。複数タスクの管理、フォルダの同期、タスクスケジューラへの登録、メール通知機能を提供します。
+            </p>
+        </div>
 
     <!-- タスクリストセクション -->
     <div class="section">
@@ -811,12 +837,6 @@
     </div>
     </div>
 
-    <!-- ログ表示 -->
-    <div class="section">
-        <div class="section-title">📝 ログ</div>
-        <textarea class="log-area" id="logArea" readonly></textarea>
-    </div>
-
     <!-- タスク履歴設定 -->
     <div class="section">
         <div class="section-title">📋 タスク履歴設定</div>
@@ -834,7 +854,16 @@
             <button class="btn-secondary" onclick="getTaskHistoryStatus()">現在の設定確認</button>
         </div>
     </div>
+    </div>
+    <!-- /main-content -->
+
+    <!-- ログサイドバー -->
+    <div class="log-sidebar">
+        <div class="section-title">📝 ログ</div>
+        <textarea class="log-area" id="logArea" readonly></textarea>
+    </div>
 </div>
+<!-- /container -->
 
 <script type="text/javascript">
 // ======================================
