@@ -483,9 +483,14 @@
                 📋 タスクリスト
                 <span id="taskCount" style="color: var(--text-muted); font-size: 14px; margin-left: 10px;">(0件)</span>
             </div>
-            <button class="btn btn-primary" onclick="showAddTaskDialog()" style="padding: 8px 16px;">
-                ➕ 新規タスク追加
-            </button>
+            <div style="display: flex; gap: 10px;">
+                <button class="btn btn-secondary" onclick="openTaskScheduler()" style="padding: 8px 16px;">
+                    📅 タスクスケジューラを開く
+                </button>
+                <button class="btn btn-primary" onclick="showAddTaskDialog()" style="padding: 8px 16px;">
+                    ➕ 新規タスク追加
+                </button>
+            </div>
         </div>
 
         <!-- タスクリスト表示エリア -->
@@ -1456,7 +1461,6 @@ function renderTaskCard(task) {
     html += '  <div class="task-actions">';
     html += '    <button class="btn btn-primary btn-small" onclick="registerTaskById(\'' + task.id + '\')">📝 登録</button>';
     html += '    <button class="btn btn-secondary btn-small" onclick="editTaskById(\'' + task.id + '\')">✏️ 編集</button>';
-    html += '    <button class="btn btn-success btn-small" onclick="testTaskById(\'' + task.id + '\')">▶️ テスト実行</button>';
     html += '    <button class="btn btn-danger btn-small" onclick="deleteTaskById(\'' + task.id + '\')">🗑️ 削除</button>';
     html += '  </div>';
     html += '</div>';
