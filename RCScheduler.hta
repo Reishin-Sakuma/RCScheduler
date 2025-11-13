@@ -1268,7 +1268,9 @@ function loadAllTasks() {
 
         for (; !files.atEnd(); files.moveNext()) {
             var file = files.item();
-            if (file.Name.toLowerCase().endsWith('.json')) {
+            // IE互換：endsWithの代わりにsliceを使用
+            var fileName = file.Name.toLowerCase();
+            if (fileName.slice(-5) === '.json') {
                 try {
                     var taskId = file.Name.substring(0, file.Name.length - 5);  // .jsonを除去
                     var task = loadTask(taskId);
