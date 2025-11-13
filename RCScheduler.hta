@@ -797,15 +797,13 @@
         <button class="btn-secondary btn-small" onclick="updateTaskStatus()">ステータス更新</button>
     </div>
 
-    <!-- 実行ボタン -->
+    <!-- タスク保存ボタン -->
     <div class="section">
-        <div class="section-title">▶️ 実行</div>
-        <div class="action-buttons">
-            <button class="btn-primary" onclick="saveConfig()">💾 設定を保存</button>
-            <button class="btn-primary" onclick="createScheduledTask()">タスク登録</button>
-            <button class="btn-danger" onclick="deleteScheduledTask()">タスク削除</button>
-            <button class="btn-secondary" onclick="openTaskScheduler()">📅 タスクスケジューラを開く</button>
+        <div class="action-buttons" style="display: flex; gap: 10px; justify-content: center;">
+            <button class="btn-primary" onclick="saveCurrentTask()" style="padding: 12px 30px; font-size: 16px;">💾 タスクを保存</button>
+            <button class="btn-secondary" onclick="cancelTaskEdit()" style="padding: 12px 30px; font-size: 16px;">❌ キャンセル</button>
         </div>
+    </div>
     </div>
 
     <!-- ログ表示 -->
@@ -1491,13 +1489,286 @@ function testTaskById(taskId) {
     alert('タスクテスト実行機能は後のステップで実装します。タスクID: ' + taskId);
 }
 
-// タスク削除（プレースホルダー）
+// タスク削除
 function deleteTaskById(taskId) {
     if (confirm('このタスクを削除してもよろしいですか？')) {
         if (deleteTask(taskId)) {
             refreshTaskList();
         }
     }
+}
+
+// ======================================
+// タスク追加・編集機能
+// ======================================
+
+var currentEditingTaskId = null;  // 現在編集中のタスクID（nullの場合は新規追加）
+
+// タスク追加ダイアログを表示
+function showAddTaskDialog() {
+    currentEditingTaskId = null;
+    clearTaskForm();
+    document.getElementById('taskEditorSection').style.display = 'block';
+    document.getElementById('taskListArea').parentElement.style.display = 'none';
+
+    // スクロールをエディタの先頭に移動
+    document.getElementById('taskEditorSection').scrollIntoView({ behavior: 'smooth' });
+
+    logMessage('新規タスク作成モードに入りました');
+}
+
+// タスク編集ダイアログを表示
+function editTaskById(taskId) {
+    // タスクを検索
+    var task = null;
+    for (var i = 0; i < tasks.length; i++) {
+        if (tasks[i].id === taskId) {
+            task = tasks[i];
+            break;
+        }
+    }
+
+    if (!task) {
+        alert('タスクが見つかりません: ' + taskId);
+        return;
+    }
+
+    currentEditingTaskId = taskId;
+    loadTaskToForm(task);
+    document.getElementById('taskEditorSection').style.display = 'block';
+    document.getElementById('taskListArea').parentElement.style.display = 'none';
+
+    // スクロールをエディタの先頭に移動
+    document.getElementById('taskEditorSection').scrollIntoView({ behavior: 'smooth' });
+
+    logMessage('タスク編集モード: ' + task.name);
+}
+
+// 現在のフォームからタスクを保存
+function saveCurrentTask() {
+    try {
+        var task = getTaskFromForm();
+
+        // バリデーション
+        if (!task.name || task.name.trim() === '') {
+            alert('タスク名を入力してください');
+            return;
+        }
+        if (!task.source || task.source.trim() === '') {
+            alert('コピー元フォルダを入力してください');
+            return;
+        }
+        if (!task.dest || task.dest.trim() === '') {
+            alert('コピー先フォルダを入力してください');
+            return;
+        }
+
+        // 編集中のタスクIDがあれば設定
+        if (currentEditingTaskId) {
+            task.id = currentEditingTaskId;
+        }
+
+        // タスクを保存
+        var taskId = saveTask(task);
+
+        if (taskId) {
+            // tasks配列を更新
+            if (currentEditingTaskId) {
+                // 既存タスクを更新
+                for (var i = 0; i < tasks.length; i++) {
+                    if (tasks[i].id === currentEditingTaskId) {
+                        tasks[i] = task;
+                        break;
+                    }
+                }
+            } else {
+                // 新規タスクを追加
+                task.id = taskId;
+                tasks.push(task);
+            }
+
+            // リストを更新してエディタを閉じる
+            refreshTaskList();
+            cancelTaskEdit();
+
+            logMessage('タスクを保存しました: ' + task.name, 'success');
+        }
+    } catch(e) {
+        logMessage('タスク保存エラー: ' + e.message, 'error');
+        alert('タスクの保存に失敗しました。\n\n' + e.message);
+    }
+}
+
+// エディタをキャンセルして閉じる
+function cancelTaskEdit() {
+    currentEditingTaskId = null;
+    document.getElementById('taskEditorSection').style.display = 'none';
+    document.getElementById('taskListArea').parentElement.style.display = 'block';
+    logMessage('タスク編集をキャンセルしました');
+}
+
+// タスクデータをフォームに読み込む
+function loadTaskToForm(task) {
+    // 基本設定
+    document.getElementById('source').value = task.source || '';
+    document.getElementById('dest').value = task.dest || '';
+    document.getElementById('taskName').value = task.name || '';
+
+    // コピーモード
+    var copyModeRadios = document.getElementsByName('copyMode');
+    for (var i = 0; i < copyModeRadios.length; i++) {
+        copyModeRadios[i].checked = (copyModeRadios[i].value === (task.copy_mode || 'MIR'));
+    }
+
+    // Robocopyオプション
+    if (task.robocopy_options) {
+        document.getElementById('optNoProgress').checked = task.robocopy_options.no_progress || false;
+        document.getElementById('optNoDirList').checked = task.robocopy_options.no_dir_list || false;
+        document.getElementById('optSec').checked = task.robocopy_options.sec || false;
+        document.getElementById('optListOnly').checked = task.robocopy_options.list_only || false;
+        document.getElementById('optEnableLog').checked = task.robocopy_options.enable_log !== false;
+    }
+
+    // リトライ設定
+    document.getElementById('retryCount').value = task.retry_count || 3;
+    document.getElementById('waitTime').value = task.wait_time || 10;
+    document.getElementById('logFile').value = task.log_file || '';
+    document.getElementById('customOptions').value = task.custom_options || '';
+
+    // スケジュール設定
+    if (task.schedule) {
+        var freqRadios = document.getElementsByName('frequency');
+        for (var i = 0; i < freqRadios.length; i++) {
+            freqRadios[i].checked = (freqRadios[i].value === (task.schedule.frequency || 'DAILY'));
+        }
+        updateWeekdayState();
+
+        if (task.schedule.weekday) {
+            setSelectedWeekdays(task.schedule.weekday);
+        }
+
+        document.getElementById('hour').value = task.schedule.hour || '00';
+        document.getElementById('minute').value = task.schedule.minute || '00';
+    }
+
+    // メール設定
+    document.getElementById('emailEnabled').checked = task.email_enabled || false;
+    toggleEmailSettings();
+
+    if (task.smtp_server) document.getElementById('smtpServer').value = task.smtp_server;
+    if (task.smtp_port) document.getElementById('smtpPort').value = task.smtp_port;
+    if (task.connection_security) document.getElementById('connectionSecurity').value = task.connection_security;
+    if (task.auth_method) document.getElementById('authMethod').value = task.auth_method;
+    if (task.sender_email) document.getElementById('senderEmail').value = task.sender_email;
+    if (task.sender_password) document.getElementById('senderPassword').value = task.sender_password;
+    if (task.recipient_email) document.getElementById('recipientEmail').value = task.recipient_email;
+
+    // タスク履歴
+    document.getElementById('historyEnabled').checked = task.history_enabled || false;
+
+    // 認証情報
+    if (task.source_username) document.getElementById('sourceUsername').value = task.source_username;
+    if (task.source_password) document.getElementById('sourcePassword').value = task.source_password;
+    if (task.source_domain) document.getElementById('sourceDomain').value = task.source_domain;
+    if (task.dest_username) document.getElementById('destUsername').value = task.dest_username;
+    if (task.dest_password) document.getElementById('destPassword').value = task.dest_password;
+    if (task.dest_domain) document.getElementById('destDomain').value = task.dest_domain;
+
+    // 認証セクションの表示状態を更新
+    updateAuthState();
+}
+
+// フォームからタスクデータを取得
+function getTaskFromForm() {
+    var task = {
+        name: document.getElementById('taskName').value,
+        enabled: true,  // 新規作成時はデフォルトで有効
+        source: document.getElementById('source').value,
+        dest: document.getElementById('dest').value,
+        copy_mode: document.querySelector('input[name="copyMode"]:checked').value,
+        robocopy_options: {
+            no_progress: document.getElementById('optNoProgress').checked,
+            no_dir_list: document.getElementById('optNoDirList').checked,
+            sec: document.getElementById('optSec').checked,
+            list_only: document.getElementById('optListOnly').checked,
+            enable_log: document.getElementById('optEnableLog').checked
+        },
+        retry_count: document.getElementById('retryCount').value,
+        wait_time: document.getElementById('waitTime').value,
+        log_file: document.getElementById('logFile').value,
+        custom_options: document.getElementById('customOptions').value,
+        schedule: {
+            frequency: document.querySelector('input[name="frequency"]:checked').value,
+            weekday: getSelectedWeekdays(),
+            hour: document.getElementById('hour').value,
+            minute: document.getElementById('minute').value
+        },
+        email_enabled: document.getElementById('emailEnabled').checked,
+        smtp_server: document.getElementById('smtpServer').value,
+        smtp_port: document.getElementById('smtpPort').value,
+        connection_security: document.getElementById('connectionSecurity').value,
+        auth_method: document.getElementById('authMethod').value,
+        sender_email: document.getElementById('senderEmail').value,
+        sender_password: document.getElementById('senderPassword').value,
+        recipient_email: document.getElementById('recipientEmail').value,
+        history_enabled: document.getElementById('historyEnabled').checked,
+        source_username: document.getElementById('sourceUsername').value,
+        source_password: document.getElementById('sourcePassword').value,
+        source_domain: document.getElementById('sourceDomain').value,
+        dest_username: document.getElementById('destUsername').value,
+        dest_password: document.getElementById('destPassword').value,
+        dest_domain: document.getElementById('destDomain').value
+    };
+
+    return task;
+}
+
+// フォームをクリア
+function clearTaskForm() {
+    document.getElementById('source').value = '';
+    document.getElementById('dest').value = '';
+    document.getElementById('taskName').value = '';
+    document.getElementById('retryCount').value = '3';
+    document.getElementById('waitTime').value = '10';
+    document.getElementById('logFile').value = '';
+    document.getElementById('customOptions').value = '';
+    document.getElementById('hour').value = '00';
+    document.getElementById('minute').value = '00';
+
+    // チェックボックスをデフォルトに
+    document.getElementById('optNoProgress').checked = true;
+    document.getElementById('optNoDirList').checked = true;
+    document.getElementById('optSec').checked = false;
+    document.getElementById('optListOnly').checked = false;
+    document.getElementById('optEnableLog').checked = true;
+    document.getElementById('emailEnabled').checked = false;
+    document.getElementById('historyEnabled').checked = false;
+
+    // ラジオボタンをデフォルトに
+    document.querySelector('input[name="copyMode"][value="MIR"]').checked = true;
+    document.querySelector('input[name="frequency"][value="DAILY"]').checked = true;
+
+    // 認証情報をクリア
+    document.getElementById('sourceUsername').value = '';
+    document.getElementById('sourcePassword').value = '';
+    document.getElementById('sourceDomain').value = '';
+    document.getElementById('destUsername').value = '';
+    document.getElementById('destPassword').value = '';
+    document.getElementById('destDomain').value = '';
+
+    // メール設定をクリア
+    document.getElementById('smtpServer').value = '';
+    document.getElementById('smtpPort').value = '587';
+    document.getElementById('connectionSecurity').value = 'STARTTLS';
+    document.getElementById('authMethod').value = 'PLAIN';
+    document.getElementById('senderEmail').value = '';
+    document.getElementById('senderPassword').value = '';
+    document.getElementById('recipientEmail').value = '';
+
+    // UI状態を更新
+    updateAuthState();
+    toggleEmailSettings();
+    updateWeekdayState();
 }
 
 function getSelectedWeekdays() {
