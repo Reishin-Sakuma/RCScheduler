@@ -180,6 +180,7 @@ robocopy_config.json
 *.bat
 *.ps1
 *.txt
+RCScheduler_tasks/
 
 venv*
 .claude

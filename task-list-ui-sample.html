@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RCScheduler - タスクリストUI サンプル</title>
+
+<style>
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
+
+    :root {
+        /* カラーパレット */
+        --primary: #3b82f6;
+        --secondary: #6b7280;
+        --success: #10b981;
+        --warning: #f59e0b;
+        --danger: #ef4444;
+        --bg-primary: #1a1a1a;
+        --bg-secondary: #2d2d2d;
+        --bg-tertiary: #404040;
+        --white: #ffffff;
+        --dark: #0f0f0f;
+        --border: #404040;
+        --text: #e5e5e5;
+        --text-muted: #a1a1a1;
+        --text-dark: #ffffff;
+    }
+
+    body {
+        font-family: 'メイリオ', Meiryo, sans-serif;
+        background-color: var(--bg-primary);
+        color: var(--text);
+        padding: 20px;
+    }
+
+    .container {
+        max-width: 1000px;
+        margin: 0 auto;
+    }
+
+    /* ヘッダー */
+    .header {
+        margin-bottom: 25px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .header h1 {
+        font-size: 28px;
+        font-weight: bold;
+        color: var(--white);
+    }
+
+    .header .version {
+        font-size: 16px;
+        color: var(--text-muted);
+        margin-left: 10px;
+    }
+
+    /* ボタン */
+    .btn {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: bold;
+        transition: all 0.2s;
+    }
+
+    .btn-primary {
+        background-color: var(--primary);
+        color: var(--white);
+    }
+
+    .btn-primary:hover {
+        background-color: #2563eb;
+    }
+
+    .btn-secondary {
+        background-color: var(--secondary);
+        color: var(--white);
+    }
+
+    .btn-secondary:hover {
+        background-color: #4b5563;
+    }
+
+    .btn-success {
+        background-color: var(--success);
+        color: var(--white);
+    }
+
+    .btn-success:hover {
+        background-color: #059669;
+    }
+
+    .btn-danger {
+        background-color: var(--danger);
+        color: var(--white);
+    }
+
+    .btn-danger:hover {
+        background-color: #dc2626;
+    }
+
+    .btn-small {
+        padding: 6px 12px;
+        font-size: 12px;
+    }
+
+    /* タスクリストセクション */
+    .task-list-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+    }
+
+    .task-list-header h2 {
+        font-size: 20px;
+        color: var(--white);
+    }
+
+    .task-count {
+        font-size: 14px;
+        color: var(--text-muted);
+        margin-left: 10px;
+    }
+
+    /* タスクカード */
+    .task-card {
+        background-color: var(--bg-secondary);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 20px;
+        margin-bottom: 15px;
+        transition: all 0.2s;
+    }
+
+    .task-card:hover {
+        border-color: var(--primary);
+        box-shadow: 0 0 10px rgba(59, 130, 246, 0.2);
+    }
+
+    .task-card.disabled {
+        opacity: 0.5;
+    }
+
+    .task-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+    }
+
+    .task-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .task-title input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+    }
+
+    .task-title h3 {
+        font-size: 18px;
+        color: var(--white);
+        margin: 0;
+    }
+
+    .task-status {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 3px;
+        font-size: 11px;
+        font-weight: bold;
+    }
+
+    .task-status.active {
+        background-color: var(--success);
+        color: var(--white);
+    }
+
+    .task-status.inactive {
+        background-color: var(--secondary);
+        color: var(--white);
+    }
+
+    .task-info {
+        margin-bottom: 15px;
+    }
+
+    .task-path {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 8px;
+    }
+
+    .task-path-item {
+        font-size: 14px;
+        color: var(--text);
+        background-color: var(--bg-tertiary);
+        padding: 6px 12px;
+        border-radius: 4px;
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .task-arrow {
+        color: var(--primary);
+        font-size: 16px;
+        font-weight: bold;
+    }
+
+    .task-schedule {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: var(--text-muted);
+    }
+
+    .task-schedule-icon {
+        color: var(--primary);
+    }
+
+    .task-actions {
+        display: flex;
+        gap: 8px;
+    }
+
+    /* 空の状態 */
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        background-color: var(--bg-secondary);
+        border: 2px dashed var(--border);
+        border-radius: 6px;
+    }
+
+    .empty-state-icon {
+        font-size: 48px;
+        color: var(--text-muted);
+        margin-bottom: 15px;
+    }
+
+    .empty-state h3 {
+        font-size: 18px;
+        color: var(--white);
+        margin-bottom: 10px;
+    }
+
+    .empty-state p {
+        font-size: 14px;
+        color: var(--text-muted);
+        margin-bottom: 20px;
+    }
+
+    /* バッチアクション */
+    .batch-actions {
+        background-color: var(--bg-secondary);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 15px;
+        margin-top: 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .batch-actions-left {
+        display: flex;
+        gap: 10px;
+    }
+
+    .batch-actions-right {
+        display: flex;
+        gap: 10px;
+    }
+</style>
+</head>
+<body>
+    <div class="container">
+        <!-- ヘッダー -->
+        <div class="header">
+            <div>
+                <h1>RCScheduler <span class="version">ver.3.0.0</span></h1>
+            </div>
+            <button class="btn btn-primary" onclick="addNewTask()">
+                ➕ 新規タスク追加
+            </button>
+        </div>
+
+        <!-- タスクリスト -->
+        <div class="task-list-header">
+            <div>
+                <h2>タスクリスト<span class="task-count">(3件)</span></h2>
+            </div>
+        </div>
+
+        <!-- タスクカード1 -->
+        <div class="task-card">
+            <div class="task-header">
+                <div class="task-title">
+                    <input type="checkbox" checked>
+                    <h3>サーバーバックアップ</h3>
+                    <span class="task-status active">有効</span>
+                </div>
+            </div>
+            <div class="task-info">
+                <div class="task-path">
+                    <div class="task-path-item">C:\Data\Documents</div>
+                    <span class="task-arrow">→</span>
+                    <div class="task-path-item">\\backup-server\share\backup</div>
+                </div>
+                <div class="task-schedule">
+                    <span class="task-schedule-icon">⏰</span>
+                    <span>毎日 2:00 実行 | /MIR モード | ログ有効</span>
+                </div>
+            </div>
+            <div class="task-actions">
+                <button class="btn btn-secondary btn-small" onclick="editTask(1)">✏️ 編集</button>
+                <button class="btn btn-success btn-small" onclick="testTask(1)">▶️ テスト実行</button>
+                <button class="btn btn-danger btn-small" onclick="deleteTask(1)">🗑️ 削除</button>
+            </div>
+        </div>
+
+        <!-- タスクカード2 -->
+        <div class="task-card">
+            <div class="task-header">
+                <div class="task-title">
+                    <input type="checkbox" checked>
+                    <h3>ドキュメント同期</h3>
+                    <span class="task-status active">有効</span>
+                </div>
+            </div>
+            <div class="task-info">
+                <div class="task-path">
+                    <div class="task-path-item">D:\Work\Projects</div>
+                    <span class="task-arrow">→</span>
+                    <div class="task-path-item">\\nas\projects</div>
+                </div>
+                <div class="task-schedule">
+                    <span class="task-schedule-icon">⏰</span>
+                    <span>毎週 月水金 18:00 実行 | /E モード | ログ有効</span>
+                </div>
+            </div>
+            <div class="task-actions">
+                <button class="btn btn-secondary btn-small" onclick="editTask(2)">✏️ 編集</button>
+                <button class="btn btn-success btn-small" onclick="testTask(2)">▶️ テスト実行</button>
+                <button class="btn btn-danger btn-small" onclick="deleteTask(2)">🗑️ 削除</button>
+            </div>
+        </div>
+
+        <!-- タスクカード3（無効） -->
+        <div class="task-card disabled">
+            <div class="task-header">
+                <div class="task-title">
+                    <input type="checkbox">
+                    <h3>一時バックアップ</h3>
+                    <span class="task-status inactive">無効</span>
+                </div>
+            </div>
+            <div class="task-info">
+                <div class="task-path">
+                    <div class="task-path-item">C:\Temp</div>
+                    <span class="task-arrow">→</span>
+                    <div class="task-path-item">E:\TempBackup</div>
+                </div>
+                <div class="task-schedule">
+                    <span class="task-schedule-icon">⏰</span>
+                    <span>毎日 23:00 実行 | /MIR モード | ログ無効</span>
+                </div>
+            </div>
+            <div class="task-actions">
+                <button class="btn btn-secondary btn-small" onclick="editTask(3)">✏️ 編集</button>
+                <button class="btn btn-success btn-small" onclick="testTask(3)">▶️ テスト実行</button>
+                <button class="btn btn-danger btn-small" onclick="deleteTask(3)">🗑️ 削除</button>
+            </div>
+        </div>
+
+        <!-- バッチアクション -->
+        <div class="batch-actions">
+            <div class="batch-actions-left">
+                <button class="btn btn-primary btn-small" onclick="registerAllTasks()">📝 すべてのタスクを登録</button>
+                <button class="btn btn-danger btn-small" onclick="unregisterAllTasks()">❌ すべてのタスクを解除</button>
+            </div>
+            <div class="batch-actions-right">
+                <button class="btn btn-secondary btn-small" onclick="exportConfig()">💾 設定をエクスポート</button>
+                <button class="btn btn-secondary btn-small" onclick="importConfig()">📂 設定をインポート</button>
+            </div>
+        </div>
+
+        <!-- 空の状態の例（コメントアウト） -->
+        <!--
+        <div class="empty-state">
+            <div class="empty-state-icon">📋</div>
+            <h3>タスクがありません</h3>
+            <p>「新規タスク追加」ボタンをクリックして、最初のバックアップタスクを作成しましょう。</p>
+            <button class="btn btn-primary" onclick="addNewTask()">➕ 新規タスク追加</button>
+        </div>
+        -->
+
+    </div>
+
+    <script>
+        function addNewTask() {
+            alert('新規タスク追加ダイアログを開きます');
+        }
+
+        function editTask(id) {
+            alert('タスク ' + id + ' の編集ダイアログを開きます');
+        }
+
+        function testTask(id) {
+            alert('タスク ' + id + ' のテスト実行を開始します');
+        }
+
+        function deleteTask(id) {
+            if (confirm('タスク ' + id + ' を削除してもよろしいですか？')) {
+                alert('タスク ' + id + ' を削除しました');
+            }
+        }
+
+        function registerAllTasks() {
+            alert('すべての有効なタスクをWindowsタスクスケジューラに登録します');
+        }
+
+        function unregisterAllTasks() {
+            if (confirm('すべてのタスクをWindowsタスクスケジューラから解除してもよろしいですか？')) {
+                alert('すべてのタスクを解除しました');
+            }
+        }
+
+        function exportConfig() {
+            alert('設定をJSONファイルとしてエクスポートします');
+        }
+
+        function importConfig() {
+            alert('設定ファイルを選択してインポートします');
+        }
+
+        // チェックボックスの切り替え
+        document.querySelectorAll('.task-card input[type="checkbox"]').forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                const card = this.closest('.task-card');
+                const status = card.querySelector('.task-status');
+
+                if (this.checked) {
+                    card.classList.remove('disabled');
+                    status.textContent = '有効';
+                    status.classList.remove('inactive');
+                    status.classList.add('active');
+                } else {
+                    card.classList.add('disabled');
+                    status.textContent = '無効';
+                    status.classList.remove('active');
+                    status.classList.add('inactive');
+                }
+            });
+        });
+    </script>
+</body>
+</html>
