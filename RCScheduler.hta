@@ -1452,6 +1452,7 @@ function renderTaskCard(task) {
     html += '    </div>';
     html += '  </div>';
     html += '  <div class="task-actions">';
+    html += '    <button class="btn btn-primary btn-small" onclick="registerTaskById(\'' + task.id + '\')">📝 登録</button>';
     html += '    <button class="btn btn-secondary btn-small" onclick="editTaskById(\'' + task.id + '\')">✏️ 編集</button>';
     html += '    <button class="btn btn-success btn-small" onclick="testTaskById(\'' + task.id + '\')">▶️ テスト実行</button>';
     html += '    <button class="btn btn-danger btn-small" onclick="deleteTaskById(\'' + task.id + '\')">🗑️ 削除</button>';
@@ -1474,19 +1475,103 @@ function toggleTaskEnabled(taskId) {
     }
 }
 
-// タスク追加ダイアログを表示（プレースホルダー）
-function showAddTaskDialog() {
-    alert('タスク追加機能は次のステップで実装します。');
-}
-
-// タスク編集（プレースホルダー）
-function editTaskById(taskId) {
-    alert('タスク編集機能は後のステップで実装します。タスクID: ' + taskId);
-}
-
-// タスクテスト実行（プレースホルダー）
+// タスクテスト実行
 function testTaskById(taskId) {
-    alert('タスクテスト実行機能は後のステップで実装します。タスクID: ' + taskId);
+    // タスクを検索
+    var task = null;
+    for (var i = 0; i < tasks.length; i++) {
+        if (tasks[i].id === taskId) {
+            task = tasks[i];
+            break;
+        }
+    }
+
+    if (!task) {
+        alert('タスクが見つかりません: ' + taskId);
+        return;
+    }
+
+    // タスクデータをフォームに一時的に読み込んでからバッチスクリプトを生成
+    // （既存のgenerateBatchScript()を使用するため）
+    var originalTask = getTaskFromForm();  // 現在のフォーム状態を保存
+    loadTaskToForm(task);  // テスト対象タスクをフォームに読み込み
+
+    try {
+        var batchScript = generateBatchScript();
+
+        // バッチファイルを一時フォルダに保存
+        var tempBatchPath = fso.BuildPath(fso.GetSpecialFolder(2), "rcscheduler_test_" + task.id + ".bat");
+        var batchFile = fso.CreateTextFile(tempBatchPath, true, false);
+        batchFile.Write(batchScript);
+        batchFile.Close();
+
+        // メールスクリプトも生成（メールが有効な場合）
+        if (task.email_enabled) {
+            var mailScript = generateMailScript();
+            var tempPs1Path = fso.BuildPath(fso.GetSpecialFolder(2), "send_robocopy_mail.ps1");
+            var ps1File = fso.CreateTextFile(tempPs1Path, true, true);  // Unicode
+            ps1File.Write(mailScript);
+            ps1File.Close();
+        }
+
+        logMessage('タスク "' + task.name + '" のテスト実行を開始します...', 'success');
+
+        // バッチファイルを実行
+        shell.Run('"' + tempBatchPath + '"', 1, false);
+
+        logMessage('バッチファイルを実行しました: ' + tempBatchPath);
+
+    } catch(e) {
+        logMessage('テスト実行エラー: ' + e.message, 'error');
+        alert('テスト実行に失敗しました。\n\n' + e.message);
+    } finally {
+        // 元のフォーム状態を復元（編集中の場合）
+        if (currentEditingTaskId) {
+            loadTaskToForm(originalTask);
+        }
+    }
+}
+
+// タスクをWindowsタスクスケジューラに登録
+function registerTaskById(taskId) {
+    // タスクを検索
+    var task = null;
+    for (var i = 0; i < tasks.length; i++) {
+        if (tasks[i].id === taskId) {
+            task = tasks[i];
+            break;
+        }
+    }
+
+    if (!task) {
+        alert('タスクが見つかりません: ' + taskId);
+        return;
+    }
+
+    if (!isAdmin()) {
+        alert("タスクスケジューラへの登録には管理者権限が必要です。");
+        return;
+    }
+
+    // タスクデータをフォームに一時的に読み込んでからスケジュールタスクを作成
+    var originalTask = getTaskFromForm();  // 現在のフォーム状態を保存
+    loadTaskToForm(task);  // 登録対象タスクをフォームに読み込み
+
+    try {
+        logMessage('タスク "' + task.name + '" をWindowsタスクスケジューラに登録します...');
+
+        // 既存のcreateScheduledTask()関数を呼び出し
+        createScheduledTask();
+
+    } catch(e) {
+        logMessage('タスク登録エラー: ' + e.message, 'error');
+        alert('タスク登録に失敗しました。\n\n' + e.message);
+    } finally {
+        // 元のフォーム状態を復元（編集中の場合）
+        if (currentEditingTaskId) {
+            loadTaskToForm(originalTask);
+        }
+    }
 }
 
 // タスク削除
@@ -1844,6 +1929,50 @@ function buildRobocopyOptions(forGui) {
     var customOptions = document.getElementById('customOptions').value.trim();
     if (customOptions) {
         options.push(customOptions);
+    }
+
+    return options.join(" ");
+}
+
+// タスクオブジェクトからRobocopyオプションを生成
+function buildRobocopyOptionsFromTask(task, forGui) {
+    var options = [];
+
+    // コピーモード
+    var copyMode = task.copy_mode || "MIR";
+    if (copyMode === "MIR") {
+        options.push("/MIR");
+    } else {
+        options.push("/E");
+    }
+
+    // その他のオプション
+    if (task.robocopy_options) {
+        if (task.robocopy_options.no_progress) {
+            options.push("/NP");
+        }
+        if (task.robocopy_options.no_dir_list) {
+            options.push("/NDL");
+        }
+        if (task.robocopy_options.sec) {
+            options.push("/SEC");
+        }
+        if (task.robocopy_options.list_only && forGui) {
+            options.push("/L");
+        }
+    }
+
+    // リトライ設定
+    if (task.retry_count) {
+        options.push("/R:" + task.retry_count);
+    }
+    if (task.wait_time) {
+        options.push("/W:" + task.wait_time);
+    }
+
+    // カスタムオプション
+    if (task.custom_options && task.custom_options.trim()) {
+        options.push(task.custom_options.trim());
     }
 
     return options.join(" ");
