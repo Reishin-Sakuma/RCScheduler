@@ -1233,7 +1233,7 @@ function generateBatchScript() {
     batch += "\r\n";
     batch += ":: 実行毎に一意なログファイル名を生成\r\n";
     batch += "for /f \"tokens=1-3 delims=/ \" %%a in (\"%date%\") do (\r\n";
-    batch += "    set DATE_PART=%%c%%b%%a\r\n";
+    batch += "    set DATE_PART=%%a%%b%%c\r\n";
     batch += ")\r\n";
     batch += "for /f \"tokens=1-3 delims=:. \" %%a in (\"%time%\") do (\r\n";
     batch += "    set TIME_PART=%%a%%b%%c\r\n";
